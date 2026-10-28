@@ -285,7 +285,7 @@ for (method in c("SCM", "COSSAC")) {
   proj <- file.path(work, paste0("search_", tolower(method), ".mlxtran"))
   show_conditions(covariate_model_building(proj, method = method, covariates = c("tlr7", "vac"),
                                            parameters = c("ta", "NPs"), scenario = cfg$scenario,
-                                           config = cfg_groups))
+                                           report_config = cfg_groups))
   # Record: any WARNING or MESSAGE about useSambaBeforeCossac, or about the strategy name
   lixoftConnectors::loadProject(proj)
   searches[[method]] <- show_conditions(lixoftConnectors::getModelBuildingResults())

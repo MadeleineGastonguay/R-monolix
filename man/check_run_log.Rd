@@ -4,7 +4,7 @@
 \alias{check_run_log}
 \title{Check that a step's cached results match the current config}
 \usage{
-check_run_log(config, step, dir)
+check_run_log(config, step, dir, before_checkpoint = FALSE)
 }
 \arguments{
 \item{config}{Output of \code{\link[=read_analysis_config]{read_analysis_config()}}.}
@@ -12,6 +12,10 @@ check_run_log(config, step, dir)
 \item{step}{1 to 4.}
 
 \item{dir}{Folder of the step's results.}
+
+\item{before_checkpoint}{Leave out the decision made partway through the
+step (step 3's \code{candidate_models}), for the part of the step that runs
+before it (the covariate search).}
 }
 \value{
 \code{TRUE} if a matching log exists, \code{FALSE} if there is no log yet.

@@ -2,7 +2,8 @@
 # Behaviour unchanged apart from: package template path, file.path() instead of here(),
 # and lixoftConnectors:: prefixes.
 # Changes since porting: get_narrow_ranges() widens only when min_fold_width is given (the SIV
-# code always widened to [best/2, 2*best]) and always keeps the best run.
+# code always widened to [best/2, 2*best]) and always keeps the best run (decided 2026-10-28:
+# the SIV rule returned no runs when the best run alone carried more than p_threshold).
 
 #' BICc weights and cumulative probability for each run
 #'

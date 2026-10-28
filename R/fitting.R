@@ -343,15 +343,15 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 #' both SCM and COSSAC, give each its own `projectFile` (e.g. `scm.mlxtran`
 #' and `cossac.mlxtran`).
 #'
+#' @param report_config Optional config, for the report's grouping and labels.
+#' @return The model-building results (`getModelBuildingResults()`), invisibly.
 #' @param scenario Optional `scenario` section of the config, used when the
 #'   best model's tasks have to be rerun. `NULL` runs every task without
 #'   linearization, as the SIV code did.
-#' @param config Optional analysis config; the best model's report is grouped
-#'   and coloured by `report.stratify_by` (see [generate_report()]).
 #' @export
 covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
                                      linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01),
-                                     scenario = NULL, config = NULL){
+                                     scenario = NULL, report_config = NULL){
   
   if(dir.exists(file.path(gsub(".mlxtran","",projectFile), "ModelBuilding"))){ 
     stop("Model building directory already exists. Aborting to avoid overwriting previous results.")
@@ -418,22 +418,23 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
 
   # Generate report with results
   generate_report(project_file = final_model_file, output_file = paste0(toupper(method), "_final_model_report.html"),
-                  config = config)
-  
+                  config = report_config)
+
+  invisible(model_building_results)
 }
 
 #' Create, fit and report an alternative treatment-effect model
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
-#' @param config Optional analysis config, for the report's groups (see
-#'   [generate_report()]).
+#' @param report_config Optional config, for the report's grouping and labels
+#'   (see [generate_report()]).
 #' @export
 alt_mod <- function(out_folder, project_name, 
                     model_file, data_file, 
                     initialvalues, treatment_effects, 
                     headerTypes, error_model, 
                     exclude_random_effects = NULL, normal_dist = NULL, 
-                    fixed = NULL, linearize = FALSE, config = NULL){
+                    fixed = NULL, linearize = FALSE, report_config = NULL){
   
   
   create_project(model_file, data_file, headerTypes, error_model, exclude_random_effects, treatment_effects, normal_dist, fixed, linearize)
@@ -447,7 +448,7 @@ alt_mod <- function(out_folder, project_name,
   print(lixoftConnectors::getEstimatedLogLikelihood())
   
   # Generate report with results
-  generate_report(project_file = file.path(out_folder, paste0(project_name, ".mlxtran")), config = config)
+  generate_report(project_file = file.path(out_folder, paste0(project_name, ".mlxtran")), config = report_config)
   
 }
 

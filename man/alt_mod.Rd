@@ -17,12 +17,12 @@ alt_mod(
   normal_dist = NULL,
   fixed = NULL,
   linearize = FALSE,
-  config = NULL
+  report_config = NULL
 )
 }
 \arguments{
-\item{config}{Optional analysis config, for the report's groups (see
-\code{\link[=generate_report]{generate_report()}}).}
+\item{report_config}{Optional config, for the report's grouping and labels
+(see \code{\link[=generate_report]{generate_report()}}).}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.

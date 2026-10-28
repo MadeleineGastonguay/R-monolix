@@ -4,7 +4,7 @@
 \alias{write_run_log}
 \title{Write the run log for a step}
 \usage{
-write_run_log(config, step, dir, extra = list())
+write_run_log(config, step, dir, extra = list(), before_checkpoint = FALSE)
 }
 \arguments{
 \item{config}{Output of \code{\link[=read_analysis_config]{read_analysis_config()}}.}
@@ -14,6 +14,10 @@ write_run_log(config, step, dir, extra = list())
 \item{dir}{Folder of the step's results.}
 
 \item{extra}{Optional named list of anything else to record.}
+
+\item{before_checkpoint}{Leave out the decision made partway through the
+step (step 3's \code{candidate_models}), for the part of the step that runs
+before it (the covariate search).}
 }
 \value{
 Path to the log, invisibly.
