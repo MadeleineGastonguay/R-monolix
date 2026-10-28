@@ -1,0 +1,695 @@
+---
+title: "Monolix Report"
+output: 
+  html_document:
+     toc: true
+     toc_float: true
+     toc_depth: 2
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+toggle: hide
+params:
+  project: "test"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message=FALSE)
+library(here)
+library(tidyverse)
+library(gt)
+library(GGally)
+theme_set(theme_classic() + 
+            theme(panel.grid.major = element_line(), 
+                  panel.grid.minor = element_line(),
+                  strip.background = element_blank()))
+library(lixoftConnectors) # initialized by init_monolix() in the calling session
+```
+
+# Project Details
+## Project Setup {.tabset}
+
+```{r}
+project <- params$project
+loadProject(projectFile = params$project)
+stat_tests <- getTests()
+```
+
+**Project file:** `r params$project`
+
+**Dataset:** `r getData()$dataFile`
+
+**Model:** `r getStructuralModel()`
+
+### Parameter Distributions and Random Effects
+
+```{r, echo = F}
+specs <- cbind(getIndividualParameterModel()$distribution,
+               1*getIndividualParameterModel()$variability$id) %>% 
+  as.data.frame() %>% 
+  set_names(c("Distribution", "IIV")) %>% 
+  cbind(1*(getIndividualParameterModel()$covariateModel %>% as.data.frame() %>% t()))  %>% 
+  as.data.frame %>% 
+  rownames_to_column("parameter") 
+
+table <- specs %>%
+  apply(2, gsub, pattern = "1", replacement = "check") %>% 
+  apply(2, gsub, pattern = "0", replacement = "") %>% 
+  as.data.frame() %>% 
+  gt(rowname_col = "parameter") %>% 
+  tab_spanner(label = "Covariates", columns = 4:ncol(specs))# %>% 
+# fmt_icon(columns = 3) 
+
+for(k in 3:ncol(specs)){
+  table <- table %>% fmt_icon(columns = k, rows = !!sym(names(specs)[k]) == "check")
+}
+
+table 
+```
+
+
+
+### Error model and Covariate model Formulas
+```{r}
+cat("Error model:\n", getContinuousObservationModel()$formula, "\n")
+cat("Covariate model:\n", getIndividualParameterModel()$formula)
+```
+### Initial conditions and estimation method
+```{r}
+getPopulationParameterInformation() %>% gt() %>% 
+  opt_interactive() 
+```
+
+### Launched Tasks
+```{r}
+tasks <- t(as.data.frame(getLaunchedTasks())) %>% 
+  as.data.frame %>% 
+  setNames("available") 
+
+tasks %>% rownames_to_column("task") %>% 
+  rbind(data.frame(task = "linearization", available = getScenario()$linearization)) %>% gt()
+```
+
+
+# Predictions
+## Population trends for each group
+
+```{r}
+data <- read_delim(getData()$dataFile, delim = "\t")
+predictions <- read_csv(file.path(gsub(".mlxtran", "", params$project), "predictions.txt"))
+if(!"vl" %in% names(predictions)){
+  replace_name <- names(getContinuousObservationModel()$prediction)
+  names(predictions)[names(predictions) == replace_name] <- "vl"
+}
+# data <- distinct(data[,getData()$headerTypes == "catcov" | getData()$headerTypes == "id"])
+columns <- c("id", "tlr7", "ab", "vac", "nnrti")
+columns <- columns[columns %in% colnames(data)]
+data <- data %>% select(all_of(columns), starts_with("int"))
+predictions <- left_join(predictions, data) 
+if("vac" %in% colnames(data)){
+  if(!"study" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(study = ifelse("vac" %in% colnames(predictions), 0, 1))
+  }
+  if(!"tlr7" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(tlr7 = 0)
+  }
+  if(!"vac" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(vac = 0)
+  }
+  
+  if("ab" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(treatment = 
+                                            factor(interaction(tlr7,vac,ab), 
+                                                   levels = c("0.0.0", "1.1.0", "1.0.1", "1.1.1"),
+                                                   labels = c("control", "tlr7 + vac", "tlr7 + ab", "tlr7 + vac + ab")),
+                                          study = 4)
+  }else{
+    predictions <- predictions %>% mutate(treatment = 
+                                            factor(interaction(tlr7,vac), 
+                                                   levels = c("0.0", "1.0", "0.1", "1.1"),
+                                                   labels = c("control", "tlr7", "vac", "vac + tlr7")))  
+  }
+  
+}else if(!"nnrti" %in% colnames(data)){
+  if(!"study" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(study = 3)
+  }
+  if(!"tlr7" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(tlr7 = 0)
+  }
+  if(!"ab" %in% colnames(predictions)){
+    predictions <- predictions %>% mutate(ab = 0)
+  }
+  
+  predictions <- predictions %>% mutate(treatment = 
+                                          factor(interaction(tlr7,ab), 
+                                                 levels = c("0.0", "1.0", "0.1", "1.1"),
+                                                 labels = c("control", "tlr7", "ab", "ab + tlr7")))
+}else if("nnrti" %in% colnames(data)){
+  predictions <- predictions %>% mutate(treatment = 
+                                          factor(nnrti, 
+                                                 levels = c("0", "1"),
+                                                 labels = c("non-nnrti", "nnrti")))
+}
+
+predictions %>% 
+  ggplot(aes(time, popPred, color = treatment, lty = factor(study))) + 
+  geom_line(linewidth = 1)  +
+  labs(x = "Time (days)", y = "Viral load", lty = "Study", title = "Population predictions for each group")
+
+```
+
+## Predictions for each individual
+
+```{r}
+predictions %>% 
+  ggplot(aes(time, indivPred_mode, color = treatment, lty = factor(study), group = id)) + 
+  geom_point(aes(y = vl), alpha = 0.25) +
+  geom_line(alpha = 0.7)  +
+  facet_wrap(~treatment) +
+  labs(x = "Time (days)", y = "Viral load", lty = "Study", title = "Individual predictions")
+```
+
+
+# Results
+
+## Population parameter estimates {.tabset}
+
+```{r}
+# estimates for population parameters with CV
+estimates <- getEstimatedPopulationParameters(coefficientsOfVariation = TRUE, withValuesByGroups = TRUE)
+if(class(estimates) == "list"){
+  estimates[grepl("Infinity", estimates)] <- Inf
+  estimates <- unlist(estimates)
+}
+estimates <- data.frame(estimate = estimates) %>% rownames_to_column("parameter")
+
+if(!is.null(getEstimatedStandardErrors(withValuesByGroups = TRUE))){
+  # Standard errors of estimates
+  ses <- getEstimatedStandardErrors(withValuesByGroups = TRUE)[[tasks["standardErrorEstimation", "available"]]]
+  # Confidence intervals for parameters
+  cis <- getEstimatedConfidenceIntervals(withValuesByGroups = TRUE)[[tasks["standardErrorEstimation", "available"]]]
+  
+  all_parameters <- Reduce(merge, list(estimates, ses, cis))  
+}else{
+  all_parameters <- estimates
+}
+
+```
+
+### Population parameters
+```{r}
+all_parameters %>% filter(grepl("_pop", parameter)) %>% 
+  mutate(transformed_estimate = signif(ifelse(parameter == "betas_pop", estimate*10^-7, ifelse(parameter == "NPs_pop", estimate*10^5, estimate)), 2)) %>% 
+  select(parameter, transformed_estimate, everything()) %>% 
+  mutate_if(is.numeric, signif, digits = 2) %>% 
+  gt()
+```
+
+### Treatment Effects
+```{r}
+tab <- all_parameters %>% filter(grepl("beta_", parameter)) %>% 
+  mutate(estimated_fold_change = signif(exp(estimate),2)) 
+
+if(as.character(tasks["standardErrorEstimation", "available"]) != "FALSE"){
+  tab <- tab %>% mutate(fc_P2.5 =signif(exp(P2.5),2), fc_P97.5 = signif(exp(P97.5),2))
+}
+
+tab %>% 
+  select(parameter, estimate, estimated_fold_change, everything()) %>% 
+  mutate_if(is.numeric, signif, digits = 2) %>% 
+  gt()
+```
+
+### Population parameters by group
+```{r}
+all_parameters %>% filter(!(grepl("_pop", parameter) | grepl("beta_", parameter) | parameter %in% c("a", "b") | grepl("omega", parameter))) %>% 
+  mutate_if(is.numeric, signif, digits = 2) %>% 
+  gt()
+```
+
+### Standard deviations of random effects
+```{r}
+tab <- merge(all_parameters %>% filter(grepl("omega", parameter)),
+             estimates %>% filter(grepl("CV", parameter)) %>% 
+               mutate(parameter = gsub("_CV", "", parameter)) %>% 
+               rename(CV = estimate)
+) %>% 
+  mutate(estimated_fold_change = round(exp(estimate),1)) 
+
+if(as.character(tasks["standardErrorEstimation", "available"]) != "FALSE"){
+  tab <- tab %>% mutate(fc_P2.5 =signif(exp(P2.5),2), fc_P97.5 = signif(exp(P97.5),2))
+}
+
+tab %>% select(parameter, estimated_fold_change, estimate, CV,  everything())  %>% 
+  mutate_if(is.numeric, signif, digits = 2) %>% 
+  gt()
+
+```
+
+### Error model parameters
+```{r}
+all_parameters %>% filter(parameter %in% c("a", "b")) %>% 
+  mutate_if(is.numeric, signif, digits = 2) %>% 
+  gt()
+```
+
+### Shrinkage
+```{r}
+var <- getIndividualParameterModel()$variability$id
+if(any(!var)){
+  # shrinkage_df <- data.frame(parameter = names(var[var]))
+  shrinkage <- getEtaShrinkage()
+  shrinkage_df <- data.frame(
+    parameter = shrinkage$conditionalMean$parameters[var],
+    conditionalMean = unlist(unname(shrinkage$conditionalMean[1,-1][var])),
+    conditionalMode = unlist(unname(shrinkage$conditionalMode[1,-1][var])),
+    conditionalDist = unlist(unname(shrinkage$conditionalDist[1,-1][var]))
+  )
+}else{
+  shrinkage <- getEtaShrinkage()
+  shrinkage_df <- data.frame(
+    parameter = shrinkage$conditionalMean$parameters[var],
+    conditionalMean = shrinkage$conditionalMean$shrinkage,
+    conditionalMode = shrinkage$conditionalMode$shrinkage,
+    conditionalDist = shrinkage$conditionalDist$shrinkage
+  )
+}
+
+shrinkage_df %>% gt()
+```
+
+
+### Correlation of Estimates
+```{r, out.width="100%",out.height="100%", warning=TRUE}
+FIM <- getCorrelationOfEstimates()
+if(!is.null(FIM)){
+  FIM <- FIM[[tasks["standardErrorEstimation", "available"]]]
+  tryCatch({
+    eigenvalues <- eigen(FIM)$values
+    cat("Condition number: ", formatC(max(eigenvalues)/min(eigenvalues), format = "e", digits = 1))
+  }, error=function(e){cat("ERROR in calculating eigenvalues: ",conditionMessage(e), "\n")})
+  
+  FIM  %>% 
+    as.data.frame %>% rownames_to_column("parameter1") %>% 
+    pivot_longer(!parameter1, names_to = "parameter2") %>% 
+    ggplot(aes(parameter1, parameter2, fill = value)) + 
+    geom_tile() + 
+    geom_text(data = . %>% filter(value > 0.5 | value < -0.5), aes(label = round(value, 2)), size = 1.7) +
+    labs(fill = "correlation", x = "", y = "") + 
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", limits = c(-1.1,1.1)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}else{
+  print("Standard Error Not Estimated")
+}
+```
+
+## Individual parameter estimates {.tabset}
+
+### Parameter Distributions
+
+Test if the transformed individual parameters are normally distributed with the Shapiro Wilk test
+```{r}
+if(!is.null(stat_tests[["indivParams"]])){
+  stat_tests$indivParams %>% 
+    select(parameters, statistic = statistics, `p-value` = p.value) %>% 
+    gt(rowname_col = "parameters") %>% 
+    tab_options(column_labels.font.weight = "bold",
+                stub.font.weight = "bold")
+}else{
+  cat("all parameters have covariates")
+}
+```
+
+#### PDF
+```{r}
+invisible(plotParametersDistribution(parameters = shrinkage_df$parameter, settings = list(ncol = 3, legend= TRUE)))
+```
+
+#### CDF
+```{r}
+invisible(plotParametersDistribution(parameters = shrinkage_df$parameter, settings = list(ncol = 3, legend= TRUE), plot = "cdf"))
+```
+
+### Correlation of individual parameters
+```{r, out.width="100%", out.height="100%"}
+getSimulatedIndividualParameters() %>% 
+  ggpairs(columns = 3:length(getSimulatedIndividualParameters()), progress = FALSE,
+          diag = list(continuous = function(data, mapping) ggplot(data, mapping) + geom_histogram(fill = "black", bins = 30) ))
+```
+
+### Correlation of random effects
+
+```{r, out.width="100%", out.height="100%"}
+getSimulatedRandomEffects() %>% 
+  ggpairs(columns = 3:length(getSimulatedIndividualParameters()), progress = FALSE,
+          diag = list(continuous = function(data, mapping) ggplot(data, mapping) + geom_histogram(fill = "black", bins = 30) ))
+```
+
+Test if random effects are correlated using a t-test
+```{r}
+stat_tests$randomEffectsCorrelation %>% 
+  select(-coeff) %>% 
+  mutate(value = paste0(signif(statistics, 2), " (", format(signif(p.value,3), scientific = TRUE), ")")) %>% 
+  select(eta1, eta2, value) %>% pivot_wider(names_from = eta1) %>%
+  apply(2, replace_na, "")  %>% 
+  as.data.frame %>% 
+  gt(rowname_col = "eta2") %>% 
+  tab_options(column_labels.font.weight = "bold",
+              stub.font.weight = "bold") %>% 
+  tab_stubhead(label = "random effect") %>% 
+  tab_spanner(everything(), label = "Random Effect") %>% 
+  tab_footnote(
+    footnote = "Numbers in parentheses are p-values from a t-test.",
+    locations = cells_column_spanners(spanners = everything())
+  )
+```
+
+### Distribution of Random Effects
+
+Test if the random effects are normally distributed using Shapiro-Wilk test
+```{r}
+stat_tests$randomEffects %>% 
+  select(eta, statistic = statistics, `p-value` = p.value) %>% 
+  gt(rowname_col = "eta") %>% 
+  tab_options(column_labels.font.weight = "bold",
+              stub.font.weight = "bold") %>% 
+  tab_stubhead(label = "random effect") 
+
+```
+
+```{r}
+plotStandardizedRandomEffectsDistribution(parameters = shrinkage_df$parameter)
+```
+
+
+### Parameters vs Covariates
+
+Test for correlation of parameters and covariates with a t-test and the wald test (stochastic approximation)
+```{r}
+
+if(!is.null(stat_tests$wald)){
+  if(!is.null(stat_tests$indivParamsCorrelation)){
+    tab <- merge(
+      stat_tests$indivParamsCorrelation,
+      stat_tests$wald %>% rename(covariate = parameter),
+      by = "covariate"
+    ) %>% 
+      select(parameter, covariate, statistics.x, p.value.x, statistics.y, p.value.y) %>% 
+      mutate_if(is.numeric, signif, digits = 3) %>% 
+      group_by(parameter) %>% 
+      gt(rowname_col = "covariate") %>% 
+      tab_spanner(label = "T-Test", columns = ends_with("x")) %>% 
+      tab_spanner(label = "Wald Test", columns = ends_with("y")) %>% 
+      cols_label(p.value.x = "p-value", p.value.y = "p-value", 
+                 statistics.x = "statistic", statistics.y = "statistic") %>% 
+      tab_options(column_labels.font.weight = "bold") %>% 
+      tab_stubhead(label = "Covariate") %>% 
+      tab_style(
+        style = cell_text(align = "left", indent = px(20)),
+        locations = cells_stub()
+      ) %>% 
+      tab_style(
+        style = list(
+          cell_text(weight = "bold", color = "red")
+        ),
+        locations = cells_body(
+          columns = p.value.y,
+          rows = p.value.y > 0.05
+        )
+      )
+  }else{
+    tab <- stat_tests$wald %>% rename(covariate = parameter) %>% 
+      select(-method) %>% 
+      mutate_if(is.numeric, signif, digits = 3) %>% 
+      gt(rowname_col = "covariate") %>% 
+      tab_spanner(label = "Wald Test", columns = 2:3) %>% 
+      cols_label(p.value = "p-value", 
+                 statistics = "statistic") %>% 
+      tab_options(column_labels.font.weight = "bold") %>% 
+      tab_stubhead(label = "Covariate") %>% 
+      tab_style(
+        style = cell_text(align = "left", indent = px(20)),
+        locations = cells_stub()
+      ) %>% 
+      tab_style(
+        style = list(
+          cell_text(weight = "bold", color = "red")
+        ),
+        locations = cells_body(
+          columns = p.value,
+          rows = p.value > 0.05
+        )
+      )
+  }
+  
+}else if(is.null(stat_tests$indivParamsCorrelation)){
+  print("no covariates")
+}else{
+  tab <- stat_tests$indivParamsCorrelation %>% 
+    select(parameter, covariate, statistics, p.value) %>% 
+    mutate_if(is.numeric, signif, digits = 3) %>% 
+    group_by(parameter) %>% 
+    gt(rowname_col = "covariate") %>% 
+    tab_spanner(label = "T-Test", columns = c("statistics", "p.value")) %>% 
+    cols_label(p.value = "p-value", p.value = "p-value") %>% 
+    tab_options(column_labels.font.weight = "bold") %>% 
+    tab_stubhead(label = "Covariate") %>% 
+    tab_style(
+      style = cell_text(align = "left", indent = px(20)),
+      locations = cells_stub()
+    )
+}
+
+tab
+
+```
+
+Test whether covariates should be added to the model using Pearson's correlation test and/or ANOVA
+
+```{r}
+stat_tests$randomEffectsVsCovariatesCorrelation %>% 
+  mutate(value = paste0(signif(statistics, 2), " (", format(signif(p.value,3), scientific = TRUE), ")")) %>% 
+  select(eta, covariate, value) %>% pivot_wider(names_from = covariate) %>%
+  # select(eta, covariate, statistics) %>% pivot_wider(names_from = covariate, values_from = statistics) %>% 
+  gt(rowname_col = "eta") %>% 
+  tab_options(column_labels.font.weight = "bold",
+              stub.font.weight = "bold") %>% 
+  tab_stubhead(label = "Random Effect") %>% 
+  tab_spanner(everything(), label = "Covariate Correlation") %>% 
+  tab_footnote(
+    footnote = "Numbers in parentheses are p-values.",
+    locations = cells_column_spanners(spanners = everything())
+  )
+```
+
+#### Parameters vs covariates
+
+```{r, out.width="100%", out.height="100%", message=FALSE}
+invisible(plotParametersVsCovariates(parameters = shrinkage_df$parameter))
+```
+
+
+
+## Model Diagnostics {.tabset}
+
+### Log Likelihood
+```{r, warning=TRUE}
+if(!is.null(getEstimatedLogLikelihood())){
+  getEstimatedLogLikelihood()[[tasks["logLikelihoodEstimation", "available"]]] %>% 
+    t() %>% as.data.frame %>% gt()
+}else{
+  print("Likelihood Not Estimated")
+}
+```
+
+```{r}
+if(!is.null(getEstimatedLogLikelihood())){
+  plotImportanceSampling()
+}
+```
+
+
+### Observed vs Predicted {.tabset}
+
+#### Full dataset
+```{r}
+plotObservationsVsPredictions(settings = list(predInterval = TRUE))
+```
+
+<!-- #### Stratified -->
+<!-- ```{r} -->
+<!-- plotObservationsVsPredictions(settings = list(predInterval = TRUE, ncol = 2), -->
+<!--                               stratify = list(split = c("vac", "tlr7"))) -->
+<!-- ``` -->
+
+
+### Visual Predictive Check {.tabset}
+#### Full data
+
+##### Visual Predictive Check
+```{r}
+plotVpc()
+```
+
+
+##### Prediction Distribution
+```{r}
+plotPredictionDistribution(settings = list(obs = TRUE, ncol = 2, cens = TRUE))
+```
+
+
+#### Stratified
+
+##### Visual Predictive Check
+```{r}
+if(length(getCovariateInformation()$name) > 1){
+  split <- getCovariateInformation()$name
+  split <- split[split %in% c("vac", "tlr7", "ab", "nnrti")]
+  plotVpc(stratify = list(split = split), settings = list(ncol = 2))
+}else{
+  NULL
+}
+
+```
+
+##### Prediction Distribution
+```{r}
+if(length(getCovariateInformation()$name) > 1){
+  plotPredictionDistribution(settings = list(obs = TRUE, ncol = 2, cens = TRUE),
+                             stratify = list(split = split)) 
+}else{
+  NULL
+}
+```
+
+
+
+
+
+<!-- ### Individual Fits {.tabset} -->
+
+<!-- #### No treatment -->
+<!-- ```{r, out.width="100%", out.height="100%"} -->
+<!-- patients <- getCovariateInformation()$covariate %>% filter(tlr7 == 0, vac == 0) %>% pull(id) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients[1:12]))) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, legend = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients[13:length(patients)]))) -->
+<!-- ``` -->
+
+
+<!-- #### Vaccine only -->
+
+<!-- ```{r, out.width="100%", out.height="100%"} -->
+<!-- patients <- getCovariateInformation()$covariate %>% filter(tlr7 == 0, vac == 1) %>% pull(id) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, legend = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients))) -->
+
+<!-- ``` -->
+
+<!-- #### TRL7 agonist only -->
+
+<!-- ```{r, out.width="100%", out.height="100%"} -->
+<!-- patients <- getCovariateInformation()$covariate %>% filter(tlr7 == 1, vac == 0) %>% pull(id) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients[1:12]))) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, legend = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients[13:length(patients)]))) -->
+
+<!-- ``` -->
+
+
+<!-- #### Both TLR7 agonist and Vaccine -->
+
+<!-- ```{r, out.width="100%", out.height="100%"} -->
+<!-- patients <- getCovariateInformation()$covariate %>% filter(tlr7 == 1, vac == 1) %>% pull(id) -->
+
+<!-- plotIndividualFits(settings = list(popCov = TRUE, legend = TRUE, scales = "fixed"), -->
+<!--                    stratify = list(individualSelection = list(ids=patients))) -->
+<!-- ``` -->
+
+
+
+### BLQ check
+```{r}
+plotBlqPredictiveCheck()
+```
+
+### Numerical Predictive Check
+```{r}
+plotNpc()
+```
+
+
+### Residuals
+Test if distribution of residuals is symmetrical around 0 with a symmetry test (difficult to interpret) and normally distributed using a Shapiro Wilk test
+
+
+<!-- ```{r} -->
+<!-- merge( -->
+<!--   stat_tests$residualsSymmetry, -->
+<!--   stat_tests$residualsNormality, -->
+<!--   by = "residuals" -->
+<!-- ) %>%  -->
+<!--   select(residuals, statistics.x, p.value.x, statistics.y, p.value.y) %>% -->
+<!--   mutate_if(is.numeric, signif, digits = 3) %>%  -->
+<!--   gt(rowname_col = "residuals") %>%  -->
+<!--   tab_options(column_labels.font.weight = "bold", -->
+<!--               stub.background.color = "darkgray", -->
+<!--               stub.font.weight = "bold") %>%  -->
+<!--   tab_spanner(label = "Symmetry Test", columns = ends_with("x")) %>%  -->
+<!--   tab_spanner(label = "Normality Test", columns = ends_with("y")) %>%  -->
+<!--   cols_label(p.value.x = "p-value", p.value.y = "p-value",  -->
+<!--              statistics.x = "statistic", statistics.y = "statistic")  -->
+<!-- ``` -->
+
+
+
+#### Residual Dstribution
+```{r}
+invisible(plotResidualsDistribution(settings = list(ncol = 2)))
+```
+
+
+#### Residual Scatterplot
+```{r}
+invisible(plotResidualsScatterPlot())
+```
+
+
+
+## Performance of Estimation Algorithms {.tabset}
+
+### SAEM
+```{r, out.width="100%", out.height="100%", include = F}
+# plotSaem()
+SAEM <- getSAEMiterations()
+SAEM$estimates %>% 
+  mutate(iteration =1:nrow(.)) %>% 
+  pivot_longer(!iteration) %>% 
+  mutate(name = fct_inorder(name)) %>%  
+  ggplot(aes(iteration, value)) + 
+  geom_line() + 
+  facet_wrap(~name, scales = "free_y") + 
+  geom_vline( xintercept = SAEM$iterationNumbers[1], color = "red") +
+  labs(x = "Iteration", y = "")
+```
+
+```{r, out.width="100%", out.height="100%"}
+invisible(plotSaem())
+```
+
+
+### Sampling Conditional Distributions
+```{r}
+invisible(plotMCMC())
+```
+
+
+
+
+

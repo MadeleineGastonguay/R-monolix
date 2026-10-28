@@ -1,0 +1,464 @@
+# Ported from SIV_HIV_rebound_kinetics/scripts/functions.R (Dec 2024).
+# Behaviour unchanged apart from: package template path, file.path() instead of here(),
+# and lixoftConnectors:: prefixes.
+# Bug fixes since porting: fixed values matched by name; results read from the project's own
+# folder (no globals); seed and predefined-run handling in initial_guess_sampling(); only missing betas
+# set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method.
+
+#' Fit the loaded project from many sampled initial values
+#'
+#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#'
+#' @param predefined_initialvalues Optional table of initial values (columns
+#'   `parameter`, `run`, `initial_value`), e.g. shared across candidate models in
+#'   step 4. When given, each predefined set is fitted exactly once, under its own
+#'   run number, and `nits` is ignored. Failed runs are not replaced, so paired
+#'   comparisons only use the runs that succeeded in every model.
+#' @param seed Seed for sampling initial values (`NULL` leaves the RNG alone).
+#' @export
+initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
+                                   nits = 100, set_variance = NULL, set_treatment = NULL,
+                                   record_shrinkage = FALSE,
+                                   fixed = NULL, predefined_initialvalues = NULL,
+                                   record_pvals = FALSE, record_indiv_params = FALSE,
+                                   record_condition_number = FALSE, record_table = FALSE,
+                                   seed = NULL){
+
+  require_monolix()
+  if(!is.null(seed)) set.seed(seed)
+
+  popparams <- lixoftConnectors::getPopulationParameterInformation()
+
+  estimates <- tabestimates <- tabiters <-  phase <- initialvalues <- shrinkage_df <- treatment_pvals <- indivParams <- predictions <- condition_numbers <- table_predictions <- NULL;
+
+  # With predefined initial values, fit each predefined set once and only those
+  if(!is.null(predefined_initialvalues)){
+    run_ids <- sort(unique(predefined_initialvalues$run))
+    if(length(run_ids) != nits){
+      warning("nits = ", nits, " but ", length(run_ids), " predefined initial value sets were given; ",
+              "using only the ", length(run_ids), " predefined sets.", call. = FALSE)
+    }
+  }
+  
+  run_condition <- TRUE
+  k <- 1
+  i <- if(is.null(predefined_initialvalues)) 1 else run_ids[1]
+  while(run_condition){
+    print(i)
+
+    if(is.null(predefined_initialvalues)){
+      
+      # sample new initial estimates
+      popini <- sapply(popparams$name, function(j){
+        if(j %in% names(fixed)){
+          unlist(fixed)[[j]]
+        }else if(j %in% log10){
+          # If sampling over orders of magnitude, sample from log10 space
+          10^(runif(1, log10(initialValue_ranges[j,1]), log10(initialValue_ranges[j,2])))
+        }else{
+          if((grepl("omega", j) | is_error_param(j)) & !is.null(set_variance)){
+            set_variance # If a value is provided for the standard deviations of random effects, do not randomly sample it
+          }else if (grepl("beta_", j) & !is.null(set_treatment)){
+            set_treatment # If a value is provided for the treatment effects, do not randomly sample it
+          }else{
+            runif(1, initialValue_ranges[j,1], initialValue_ranges[j,2])  
+          }
+        }
+      })
+      
+      # set sampled values as new initial estimates
+      newpopparams <- popparams
+      newpopparams$initialValue <- popini
+      initialvalues <- rbind(initialvalues, newpopparams %>% mutate(run = i) %>% rename(parameter = name, initial_value = initialValue))
+      
+      if(!is.null(fixed)){
+        newpopparams[newpopparams$name %in% names(fixed),"method"] <- "FIXED"
+        newpopparams[newpopparams$name %in% names(fixed),"initialValue"] <- unlist(fixed)[newpopparams$name[newpopparams$name %in% names(fixed)]]
+      }
+      
+    }else{
+      
+      igs <- predefined_initialvalues %>% filter(run == i) %>% as.data.frame()
+      newpopparams <- popparams %>% rowwise %>%  
+        # Only set initial conditions for parameters that have saved initial conditions. Otherwise, use default values
+        mutate(initialValue = ifelse(name %in% igs$parameter, igs[igs$parameter == name, "initial_value"], initialValue)) %>% 
+        as.data.frame() 
+      initialvalues <- rbind(initialvalues, newpopparams %>% mutate(run = i) %>% rename(parameter = name, initial_value = initialValue))
+    }
+    
+    lixoftConnectors::setPopulationParameterInformation(newpopparams)
+    
+    # run the estimation
+    tryCatch({
+      lixoftConnectors::runScenario()
+      
+      # store the estimates and s.e. in a table
+      estimates <- as.data.frame(lixoftConnectors::getEstimatedPopulationParameters())
+      names(estimates) <- "estimate"
+      rses <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation$rse
+      names(rses) <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation$parameter
+      rses <- data.frame(rse = rses)
+      estimates <- merge(estimates, rses, by = "row.names")
+      estimates$run <- i
+      estimates$ofv <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[1]
+      estimates$aic <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[2]
+      estimates$bic <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[3]
+      estimates$bicc <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[4]
+      names(estimates)[names(estimates) == "Row.names"] <- "parameter"
+      tabestimates <- rbind(tabestimates, estimates)
+      
+      # store the iterations
+      iters <- lixoftConnectors::getSAEMiterations()$estimates %>% mutate(iteration = 1:nrow(.))
+      iters$run <- i
+      tabiters <- rbind(tabiters, iters)
+      
+      # Get wald-test p-values for treatment effects;
+      if(record_pvals){
+        p <- lixoftConnectors::getTests()$wald
+        if(!is.null(p)){
+          treatment_pvals <- rbind(
+            treatment_pvals, 
+            p %>% mutate(run = i)
+          )
+        }
+      }
+      
+      # Store Phase Iteration
+      phase <- rbind(phase, lixoftConnectors::getSAEMiterations()$iterationNumbers)
+      
+      # Get Individual parameters if specified
+      if(record_indiv_params){
+        indivParams <- rbind(
+          indivParams,
+          lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode %>% 
+            mutate(run = i)
+        )
+        
+        predictions <- rbind(
+          predictions, 
+          read_delim(file.path(project_results_dir(), "predictions.txt")) %>% 
+            mutate(run = i)
+        )
+      }
+      
+      # Get shrinkage for individual parameters if specified
+      if(record_shrinkage){
+        shrinkage <- lixoftConnectors::getEtaShrinkage()
+        if(any(!lixoftConnectors::getIndividualParameterModel()$variability$id)){
+          shrinkage_df <- rbind(
+            shrinkage_df,
+            data.frame(
+              run = i,
+              parameter = shrinkage$conditionalMean$parameters,
+              conditionalMean = unlist(unname(shrinkage$conditionalMean[1,-1])),
+              conditionalMode = unlist(unname(shrinkage$conditionalMode[1,-1])),
+              conditionalDist = unlist(unname(shrinkage$conditionalDist[1,-1]))
+            )
+          )
+        }else{
+          shrinkage_df <- rbind(
+            shrinkage_df,
+            data.frame(
+              run = i,
+              parameter = shrinkage$conditionalMean$parameters,
+              conditionalMean = shrinkage$conditionalMean$shrinkage,
+              conditionalMode = shrinkage$conditionalMode$shrinkage,
+              conditionalDist = shrinkage$conditionalDist$shrinkage
+            )
+          )
+        }
+      }
+      
+      # Get condition number if specified:
+      if(record_condition_number){
+        FIM <- lixoftConnectors::getCorrelationOfEstimates()$stochasticApproximation
+        eigenvalues <- eigen(FIM)$values
+        condition_number <- max(eigenvalues)/min(eigenvalues)
+        condition_numbers <- rbind(condition_numbers, data.frame(run = i, condition_number = condition_number))  
+      }
+      
+      # Get predictions for variables in table if specified:
+      if(record_table){
+        table_predictions <- rbind(
+          table_predictions, 
+          read_delim(file.path(project_results_dir(), "tables.txt")) %>% 
+            mutate(run = i)
+        )
+      }
+      
+      
+    }, error=function(e){cat("ERROR for ", i, ": ",conditionMessage(e), "\n")})
+    
+    if(is.null(predefined_initialvalues)){
+      # Random sampling: keep drawing until nits runs succeed
+      i <- i + 1
+      if(length(unique(tabestimates$run)) >= nits) run_condition <- FALSE
+    }else{
+      # Predefined values: stop after the last predefined set
+      k <- k + 1
+      if(k > length(run_ids)) run_condition <- FALSE else i <- run_ids[k]
+    }
+    
+  }
+  
+  if(is.null(tabestimates)) stop("All runs failed; see the errors printed above.", call. = FALSE)
+  
+  if(!is.null(predefined_initialvalues)){
+    failed <- setdiff(run_ids, unique(tabestimates$run))
+    if(length(failed) > 0){
+      warning(length(failed), " of ", length(run_ids), " predefined runs failed (runs ",
+              paste(failed, collapse = ", "), "). They are not replaced.", call. = FALSE)
+    }
+  }
+  
+  out <- list(tabestimates = tabestimates,
+              tabiters = tabiters,
+              phase = phase,
+              initialvalues = initialvalues)
+  
+  if(record_shrinkage){
+    out$shrinkage <- shrinkage_df
+  }
+  
+  if(record_pvals){
+    out$pvals <- treatment_pvals
+  }
+  
+  if(record_indiv_params){
+    out$indivParams <- indivParams
+    out$indivFit <- predictions
+  }
+  
+  if(record_condition_number){
+    out$condition_number <- condition_numbers
+  }
+  
+  if(record_table){
+    out$table_predictions <- table_predictions
+  }
+  
+  # Rerun the model with the initial values that gave the best fit:
+  best_run <- tabestimates %>% filter(bicc == min(bicc)) %>% pull(run) %>% unique
+  igs <- initialvalues %>% filter(run == best_run) %>% rename(name = parameter, initialValue = initial_value) %>% select(-run)
+  if(!is.null(fixed)){
+    igs[igs$name %in% names(fixed),"method"] <- "FIXED"
+    igs[igs$name %in% names(fixed),"initialValue"] <- unlist(fixed)[igs$name[igs$name %in% names(fixed)]]
+  }
+  lixoftConnectors::setPopulationParameterInformation(igs)
+  lixoftConnectors::runScenario()
+  
+  return(out)
+}
+
+#' Profile likelihood for one population parameter
+#'
+#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' @export
+profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = F, record_predictions = F){
+  
+  values <- seq(range[1], range[2], length.out = nits)
+  
+  initialValues <- igs
+  if("estimate" %in% names(igs)){
+    initialValues <- igs %>% select(name = parameter, initialValue = estimate) %>%
+      mutate(method = "MLE", initialValue = ifelse(grepl("pop", name), initialValue, pmax(initialValue, 1))) 
+  }
+  if("parameter" %in% names(igs)){
+    names(initialValues)[names(initialValues) == "parameter"] <- "name"
+  }
+  if("initial_value" %in% names(initialValues)){
+    names(initialValues)[names(initialValues) == "initial_value"] <- "initialValue"
+  }
+  
+  
+  initialValues[initialValues$name == parameter, "method"] <- "FIXED"
+  
+  if(linearize){
+    scenario <- lixoftConnectors::getScenario()
+    scenario$linearization <- TRUE
+    lixoftConnectors::setScenario(scenario)
+  }else{
+    scenario <- lixoftConnectors::getScenario()
+    scenario$linearization <- FALSE
+    lixoftConnectors::setScenario(scenario)
+  }
+  
+  tabestimates <- NULL
+  predictions <- NULL
+  for(i in 1:nits){
+    print(i)
+    
+    # Set initial conditions
+    value <- values[i]
+    
+    initialValues[initialValues$name == parameter, "initialValue"] <- value
+    lixoftConnectors::setPopulationParameterInformation(initialValues)
+    
+    # print(lixoftConnectors::getPopulationParameterInformation())
+    
+    tryCatch({
+      # Model fitting
+      lixoftConnectors::runScenario()
+      
+      # Get standard errors and likelihoods:
+      if(linearize){
+        SEs <- lixoftConnectors::getEstimatedStandardErrors()$linearization
+        likelihoods <- lixoftConnectors::getEstimatedLogLikelihood()$linearization
+      }else{
+        SEs <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation
+        likelihoods <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling
+      }
+      
+      
+      # store the estimates and s.e. in a table
+      estimates <- as.data.frame(lixoftConnectors::getEstimatedPopulationParameters())
+      names(estimates) <- "estimate"
+      rses <- SEs$rse
+      names(rses) <- SEs$parameter  
+      rses <- data.frame(rse = rses)
+      estimates <- merge(estimates, rses, by = "row.names")
+      estimates$profiled_parameter <- parameter
+      estimates$profiled_value <- value
+      estimates$ofv <- likelihoods[1]
+      estimates$aic <- likelihoods[2]
+      estimates$bic <- likelihoods[3]
+      estimates$bicc <- likelihoods[4]
+      names(estimates)[names(estimates) == "Row.names"] <- "parameter"
+      
+      print(paste0(parameter, ": ", value, " bicc: ", round(unique(estimates$bicc))))
+      
+      # Combine results
+      tabestimates <- rbind(tabestimates, estimates)
+      
+      if(record_predictions){
+        vl_pred <- lixoftConnectors::getEstimatedPredictions()$tot  %>% mutate(id = as.character(id)) 
+        EBE <- lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode  %>% mutate(id = as.character(id))
+        table_pred <- read_delim(file.path(project_results_dir(), "tables.txt")) %>% 
+          select(id, time, contains("mode"))  %>% mutate(id = as.character(id))
+        predictions_temp <- right_join(
+          EBE,
+          left_join(
+            vl_pred, table_pred
+          )
+        ) %>% mutate(profiled_parameter = parameter, profiled_value = value) %>% 
+          select(profiled_parameter, profiled_value, everything())
+        
+        # Combine resuts
+        predictions <- rbind(predictions, predictions_temp)
+      }
+      
+      
+      if(use_estimates_as_ig){
+        initialValues <- estimates %>% select(name = parameter, initialValue = estimate) %>% 
+          mutate(method = "MLE", initialValue = ifelse(grepl("pop", name), initialValue, pmax(initialValue, 1))) 
+        initialValues <- rbind(initialValues, data.frame(name = parameter, initialValue = value, method = "FIXED"))
+      }
+      
+      
+    }, error=function(e){cat("ERROR for ", i, ": ",conditionMessage(e), "\n")})
+    
+  }
+  
+  if(record_predictions){
+    return(list(tabestimates = tabestimates, predictions = predictions))
+  }else{
+    return(tabestimates)
+  }
+  
+}
+
+#' Run Monolix covariate model building (SCM or COSSAC)
+#'
+#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' @export
+covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
+                                     linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01)){
+  
+  if(dir.exists(file.path(gsub(".mlxtran","",projectFile), "ModelBuilding"))){ 
+    stop("Model building directory already exists. Aborting to avoid overwriting previous results.")
+  }else if (!file.exists(projectFile)){
+    lixoftConnectors::saveProject(projectFile)
+  }
+  
+  # get the default covariate search settings ####
+  set <- lixoftConnectors::getModelBuildingSettings()
+  
+  # modify the settings
+  set$strategy <- method # "cossac" or "scm"
+  set$useSambaBeforeCossac <- FALSE # if true, corresponds to "covSAMBA-COSSAC" in the GUI
+  set$criterion <- criteria # "BIC" (Monolix uses this for BICc) or "LRT"
+  set$useLin <- linearization
+  set$threshold$lrt <- lrt_thresold # first element is for forward selection, second for backward elimination
+  
+  if(!is.null(parameters)){
+    set$parameters <- parameters
+  }
+  
+  if(!is.null(relationships)){
+    set$relationships <- relationships
+  }
+  
+  if(!any(covariates == "all")){
+    set$covariates <- covariates
+  }
+  
+  #####
+  # Run search
+  lixoftConnectors::runModelBuilding(settings=set)
+  model_building_results <- lixoftConnectors::getModelBuildingResults()
+  
+  #####
+  # Generate report for best model
+  # Get best model
+  best_model <- which(unlist(model_building_results %>% lapply("[[", "bestModel")))
+  best_model_file <- sprintf("ModelBuilding_%03d", best_model)
+  best_cov <- model_building_results[[best_model]]$individualModels
+  
+  final_projectFile <- file.path(gsub(".mlxtran", "", projectFile), "ModelBuilding", sprintf("ModelBuilding_%03d", best_model), paste0(sprintf("ModelBuilding_%03d", best_model), ".mlxtran") )
+  lixoftConnectors::loadProject(final_projectFile)
+  
+  if(any(as.character(unlist(lixoftConnectors::getLaunchedTasks())) == "FALSE")){
+    scenario <- lixoftConnectors::getScenario()
+    scenario$tasks[] <- TRUE
+    scenario$linearization <- FALSE
+    lixoftConnectors::setScenario(scenario)
+    
+    lixoftConnectors::runScenario()
+    lixoftConnectors::computeChartsData()
+    
+    lixoftConnectors::saveProject( file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"))
+  }
+  
+  # Generate report with results
+  generate_report(project_file = file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"), 
+                  output_file = "SCM_final_model_report.html")
+  
+}
+
+#' Create, fit and report an alternative treatment-effect model
+#'
+#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' @export
+alt_mod <- function(out_folder, project_name, 
+                    model_file, data_file, 
+                    initialvalues, treatment_effects, 
+                    headerTypes, error_model, 
+                    exclude_random_effects = NULL, normal_dist = NULL, 
+                    fixed = NULL, linearize = FALSE){
+  
+  
+  create_project(model_file, data_file, headerTypes, error_model, exclude_random_effects, treatment_effects, normal_dist, fixed, linearize)
+  
+  set_base(initialvalues, fixed = fixed)
+  
+  lixoftConnectors::saveProject(file.path(out_folder, paste0(project_name, ".mlxtran")))
+  
+  lixoftConnectors::runScenario()
+  
+  print(lixoftConnectors::getEstimatedLogLikelihood())
+  
+  # Generate report with results
+  generate_report(project_file = file.path(out_folder, paste0(project_name, ".mlxtran")))
+  
+}
+
