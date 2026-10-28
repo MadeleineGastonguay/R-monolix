@@ -22,6 +22,9 @@ initial_guess_sampling(
 )
 }
 \arguments{
+\item{set_treatment}{Starting value for every \verb{beta_*} treatment effect.
+Without it, treatment effects start at 0 (they have no sampling range).}
+
 \item{set_error}{Named starting values for error-model parameters (see
 \code{\link[=error_starts]{error_starts()}}). They are still estimated; only the start is set. If
 \code{NULL}, error parameters follow \code{set_variance} or their sampling range, as

@@ -39,3 +39,14 @@ test_that("prepare_initial_values rounds _pop values and resets omegas and betas
   expect_equal(iv$initial_value, c(100, 1, 0, 0.27))
   expect_equal(prepare_initial_values(best, sig_figs = 2, omega_value = 0.5)$initial_value[1:2], c(120, 0.5))
 })
+
+test_that("treatment effects start at 0 without set_treatment or a sampling range", {
+  ranges <- data.frame(min = c(1, 10), max = c(2, 20), row.names = c("k_pop", "v_pop"))
+  iv <- sample_initial_values(ranges, c("k_pop", "v_pop", "beta_k_sex_1"), n = 3, seed = 1)
+  expect_equal(iv$initial_value[iv$parameter == "beta_k_sex_1"], c(0, 0, 0))
+  # the other parameters are drawn as before (a beta uses no random numbers)
+  iv2 <- sample_initial_values(ranges, c("k_pop", "v_pop"), n = 3, seed = 1)
+  expect_equal(iv$initial_value[iv$parameter != "beta_k_sex_1"], iv2$initial_value)
+  # other parameters without a range still error
+  expect_error(sample_initial_values(ranges, c("k_pop", "p_pop"), n = 1), "No sampling range for p_pop")
+})

@@ -98,3 +98,12 @@ test_that("read_simulated_variables reads simulate_model_variables() output", {
   expect_equal(v$value, 1:4)
   expect_equal(attr(v, "prediction"), "mode")
 })
+
+test_that("censoring_table marks censored observations per id and time", {
+  d <- data.frame(ID = c(1, 1, 1, 2), t = c(0, 4, 8, 0), y = c(1.7, NA, 3, 1.7), cens = c(1, 0, 0, 1))
+  ct <- censoring_table(d, c("ID", "t", "y", "cens"), c("id", "time", "observation", "cens"))
+  expect_equal(names(ct), c("ID", "time", "censored"))
+  expect_equal(ct$time, c(0, 8, 0))   # the row without an observation is left out
+  expect_equal(ct$censored, c(TRUE, FALSE, TRUE))
+  expect_null(censoring_table(d[, 1:3], c("ID", "t", "y"), c("id", "time", "observation")))
+})

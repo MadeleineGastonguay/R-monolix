@@ -59,7 +59,7 @@ plot_parameter_ranges <- function(wide_ranges, wide_estimates, narrow_ranges = N
   df$range <- factor(df$range, levels = rev(lev))
   best$range <- factor(if (is.null(narrow_estimates)) "Wide: estimates" else "Narrow: best-supported runs", levels = rev(lev))
 
-  plot <- ggplot(df, aes(y = range, xmin = min, xmax = max, color = range)) +
+  plot <- ggplot_report(df, aes(y = range, xmin = min, xmax = max, color = range)) +
     geom_linerange(linewidth = 2) +
     geom_point(data = best, aes(x = estimate, y = range), inherit.aes = FALSE, size = 2) +
     facet_wrap(~label, scales = "free_x") +

@@ -37,7 +37,8 @@ attribute of \code{ranges}.}
 \item{set_variance}{Starting value for every \verb{omega_*} (and error parameters
 without a \code{set_error} value), instead of sampling.}
 
-\item{set_treatment}{Starting value for every \verb{beta_*}.}
+\item{set_treatment}{Starting value for every \verb{beta_*}. Without it, a
+\verb{beta_*} with no sampling range starts at 0.}
 
 \item{seed}{Seed for the draws (\code{NULL} leaves the RNG alone).}
 }

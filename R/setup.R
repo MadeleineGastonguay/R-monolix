@@ -177,6 +177,9 @@ generate_report <- function(project_file, output_file = "report.html", config = 
                             title = "Monolix report", simulate_variables = TRUE, variables = NULL){
   require_monolix()
   project_file <- normalizePath(project_file, mustWork = TRUE)
+  # The template sets ggplot's global theme for Monolix's plots; put the caller's back after
+  old_theme <- ggplot2::theme_get()
+  on.exit(ggplot2::theme_set(old_theme), add = TRUE)
   # Fine-grained model-variable curves; stale curves are removed so a failed simulation
   # doesn't leave curves from an earlier fit
   sim_file <- simulated_variables_file(str_remove(project_file, "\\.mlxtran$"))

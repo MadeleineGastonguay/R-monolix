@@ -2,7 +2,7 @@
 % Please edit documentation in R/plots_fits.R
 \name{plot_individual_fits}
 \alias{plot_individual_fits}
-\title{Individual fits of one run}
+\title{Individual fits of an IGS}
 \usage{
 plot_individual_fits(
   indivFit,
@@ -10,7 +10,8 @@ plot_individual_fits(
   run = NULL,
   observation = NULL,
   ids = NULL,
-  log_y = FALSE
+  log_y = FALSE,
+  all_runs = TRUE
 )
 }
 \arguments{
@@ -18,18 +19,23 @@ plot_individual_fits(
 
 \item{tabestimates}{Optional \code{tabestimates}, used to pick the best run.}
 
-\item{run}{Run to plot (default: best run, or the first run).}
+\item{run}{Run to highlight (default: best run, or the first run).}
 
 \item{observation}{Observation column (guessed when \code{NULL}).}
 
 \item{ids}{Individuals to show (default: all).}
 
 \item{log_y}{Log10 y axis.}
+
+\item{all_runs}{Also draw the other runs' individual predictions.}
 }
 \value{
 A ggplot.
 }
 \description{
-Observations with the individual (conditional mode) and population
-predictions, one panel per individual.
+One panel per individual: the observations (open circles when censored),
+the individual (conditional mode) and population predictions of the best
+run, and, with \code{all_runs}, the individual predictions of every other run as
+thin grey lines, to show how much the fits vary between initial values.
+Predictions are at the observation times (predictions.txt).
 }

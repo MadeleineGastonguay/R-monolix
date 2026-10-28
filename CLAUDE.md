@@ -24,8 +24,8 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 - `R/`: package code. `fitting.R`, `setup.R`, `selection.R` and `plots_*.R` are ported from the
   SIV `functions.R` (bug fixes noted at the top of each file). `config.R`, `draft_config.R`,
   `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
-  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `report.R`,
-  `simulx.R` are new.
+  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `plots_theme.R`,
+  `report.R`, `simulx.R` are new.
 - `inst/rmarkdown/templates/monolix_report/`: HTML report template, rendered by `generate_report()`
   in an environment whose parent is the package namespace (it uses package helpers directly).
   Groups, labels and rescaling come from `report.*` and `model.report_transforms` in the config;
@@ -39,6 +39,8 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 ## Conventions
 - Settings live in `analysis.yaml` (see `config_defaults()`, `draft_config()`). `~` = not
   decided yet; `{}` = none. Run logs (`run_log.yaml`) are written by the pipeline, never edited.
+- Every plot the package draws uses `theme_report()` (`R/plots_theme.R`; build plots with
+  `ggplot_report()`), groups coloured with Dark2. Monolix's own plots in the report keep theirs.
 - Plotting and summary functions never call lixoftConnectors (checked by
   `tests/testthat/test-no-monolix.R`), so they work on saved results without Monolix.
 - Column names in every table the package makes: `parameter`, `run`, `estimate`, `rse`, `ofv`,

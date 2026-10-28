@@ -21,6 +21,8 @@
 #'   [error_starts()]). They are still estimated; only the start is set. If
 #'   `NULL`, error parameters follow `set_variance` or their sampling range, as
 #'   in the SIV code.
+#' @param set_treatment Starting value for every `beta_*` treatment effect.
+#'   Without it, treatment effects start at 0 (they have no sampling range).
 #' @param seed Seed for sampling initial values (`NULL` leaves the RNG alone).
 #' @export
 initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
@@ -36,6 +38,12 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
 
   popparams <- lixoftConnectors::getPopulationParameterInformation()
   methods <- result_methods()  # linearization or not, from the project's scenario
+  # Which observations are censored, joined onto each run's predictions (predictions.txt
+  # doesn't say); NULL when the data has no cens column
+  censoring <- if (record_indiv_params) tryCatch({
+    d <- lixoftConnectors::getData()
+    censoring_table(read_monolix_data(d$dataFile), d$header, d$headerTypes)
+  }, error = function(e) NULL)
 
   estimates <- tabestimates <- tabiters <-  phase <- initialvalues <- shrinkage_df <- treatment_pvals <- indivParams <- predictions <- condition_numbers <- table_predictions <- NULL;
 
@@ -123,11 +131,11 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
           lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode %>%
             mutate(run = i)
         )
-        predictions <- rbind(
-          predictions,
-          read_delim(file.path(project_results_dir(), "predictions.txt"), show_col_types = FALSE) %>%
-            mutate(run = i)
-        )
+        pred_i <- read_delim(file.path(project_results_dir(), "predictions.txt"), show_col_types = FALSE)
+        if (!is.null(censoring) && all(names(censoring)[1:2] %in% names(pred_i))) {
+          pred_i <- left_join(pred_i, censoring, by = names(censoring)[1:2])
+        }
+        predictions <- rbind(predictions, pred_i %>% mutate(run = i))
       })
 
       if(record_shrinkage) record_step("shrinkage", i, {
@@ -338,10 +346,12 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 #' @param scenario Optional `scenario` section of the config, used when the
 #'   best model's tasks have to be rerun. `NULL` runs every task without
 #'   linearization, as the SIV code did.
+#' @param config Optional analysis config; the best model's report is grouped
+#'   and coloured by `report.stratify_by` (see [generate_report()]).
 #' @export
 covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
                                      linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01),
-                                     scenario = NULL){
+                                     scenario = NULL, config = NULL){
   
   if(dir.exists(file.path(gsub(".mlxtran","",projectFile), "ModelBuilding"))){ 
     stop("Model building directory already exists. Aborting to avoid overwriting previous results.")
@@ -407,20 +417,23 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
   }
 
   # Generate report with results
-  generate_report(project_file = final_model_file, output_file = paste0(toupper(method), "_final_model_report.html"))
+  generate_report(project_file = final_model_file, output_file = paste0(toupper(method), "_final_model_report.html"),
+                  config = config)
   
 }
 
 #' Create, fit and report an alternative treatment-effect model
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' @param config Optional analysis config, for the report's groups (see
+#'   [generate_report()]).
 #' @export
 alt_mod <- function(out_folder, project_name, 
                     model_file, data_file, 
                     initialvalues, treatment_effects, 
                     headerTypes, error_model, 
                     exclude_random_effects = NULL, normal_dist = NULL, 
-                    fixed = NULL, linearize = FALSE){
+                    fixed = NULL, linearize = FALSE, config = NULL){
   
   
   create_project(model_file, data_file, headerTypes, error_model, exclude_random_effects, treatment_effects, normal_dist, fixed, linearize)
@@ -434,7 +447,7 @@ alt_mod <- function(out_folder, project_name,
   print(lixoftConnectors::getEstimatedLogLikelihood())
   
   # Generate report with results
-  generate_report(project_file = file.path(out_folder, paste0(project_name, ".mlxtran")))
+  generate_report(project_file = file.path(out_folder, paste0(project_name, ".mlxtran")), config = config)
   
 }
 

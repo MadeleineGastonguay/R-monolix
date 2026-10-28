@@ -16,8 +16,13 @@ alt_mod(
   exclude_random_effects = NULL,
   normal_dist = NULL,
   fixed = NULL,
-  linearize = FALSE
+  linearize = FALSE,
+  config = NULL
 )
+}
+\arguments{
+\item{config}{Optional analysis config, for the report's groups (see
+\code{\link[=generate_report]{generate_report()}}).}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.

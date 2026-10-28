@@ -216,4 +216,89 @@ show_conditions(lixoftConnectors::getLixoftConnectorsState())
 # lixoftConnectors::initializeLixoftConnectors("monolix", force = TRUE)
 # Record: any "Not available for this project" notes and their messages.
 
+# 15. Step 5 diagnostics on a real IGS result (TODO: "Check in the next Monolix round") ####
+# Uses `res` from section 4.
+diag_dir <- file.path(work, "igs_diagnostics")
+diag <- show_conditions(save_igs_diagnostics(res, diag_dir))
+print(diag)   # Expect: ok TRUE for every output; record any message
+list.files(diag_dir, recursive = TRUE)
+ids <- identifiability_summary(res)
+print(ids[, intersect(c("parameter", "shrinkage", "flags"), names(ids))])
+res$shrinkage[res$shrinkage$run == 1, ]
+# Expect: shrinkage filled in on every omega_ row (the shrinkage table's names, e.g. "lambda",
+# map onto omega_lambda); record any omega_ row left NA
+observation_column(res$indivFit)   # Expect: "vl" (the one column that isn't id, time or a prediction)
+names(res$indivFit)
+# individual_fits.pdf in diag_dir: open it and check fits and observations look right, and how
+# censored observations (censor = 1 in the data) are drawn
+
+# 16. Wald tests and model comparison (compare_models()) ####
+# Two models fitted from the same initial values: the base model (igs_check) and ta ~ vac
+# (report_check, section 13). Each is saved under its own name first, so the runs don't
+# overwrite igs_check or report_check results.
+lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))
+lixoftConnectors::saveProject(file.path(work, "cmp_base.mlxtran"))
+cmp_base <- initial_guess_sampling(ranges_tbl, log10 = attr(ranges_tbl, "log10"), nits = 3, seed = 1,
+                                   set_error = starts, record_pvals = TRUE, record_condition_number = TRUE)
+lixoftConnectors::loadProject(file.path(work, "report_check.mlxtran"))
+lixoftConnectors::saveProject(file.path(work, "cmp_vac.mlxtran"))
+cmp_vac <- initial_guess_sampling(ranges_tbl, log10 = attr(ranges_tbl, "log10"), nits = 3, seed = 1,
+                                  set_error = starts, record_pvals = TRUE, record_condition_number = TRUE)
+str(cmp_vac$pvals)
+# Record: the column names of getTests()$wald (compare_models() looks for p.value, pvalue or
+# p_value) and whether beta_ta_vac_1 has a p-value
+cmp <- show_conditions(compare_models(list(base = cmp_base, vac = cmp_vac)))
+cmp$summary   # Expect: 2 models, n_runs = number of runs that succeeded in both
+cmp$wald      # Expect: rows for beta_ta_vac_1 (NA p-values if its standard error is nan)
+
+# 17. Rejected structural parameter names ####
+# a) create_project() stops on a rejected model (until now tested only with mocks)
+m <- readLines(file.path(work, "2regime_model_delay.txt"))
+writeLines(gsub("\\bm\\b", "a", m), file.path(work, "model_param_a.txt"))
+spec_a <- spec; spec_a$model_file <- file.path(work, "model_param_a.txt")
+show_conditions(setup_project(spec_a))
+# Expect: ERROR: Monolix could not create the project from .../model_param_a.txt
+# b) Does Monolix also reject `b` or `c` with a constant error model (error parameter `a` only)?
+for (nm in c("b", "c")) {
+  writeLines(gsub("\\bm\\b", nm, m), file.path(work, paste0("model_param_", nm, ".txt")))
+  ok <- show_conditions(lixoftConnectors::newProject(modelFile = file.path(work, paste0("model_param_", nm, ".txt")),
+                                                     data = list(dataFile = spec$data_file, headerTypes = spec$header_types)))
+  cat(nm, "accepted:", isTRUE(ok), "\n")
+}
+# Record: accepted TRUE/FALSE for b and c (validate_config() rejects a, b and c to be safe)
+
+# 18. Covariate search through the package: SCM and COSSAC (TODO: "Covariate search options") ####
+# Each search gets its own project file, so their ModelBuilding folders don't collide.
+# covariate_model_building() also renders a report of the best model (with the Simulx step).
+# The best-model reports are grouped by tlr7 x vac, as in section 13
+cfg_groups <- cfg
+cfg_groups$report$stratify_by <- list("tlr7", "vac")
+cfg_groups$report$group_labels <- list("0.0" = "control", "1.1" = "tlr7 + vac")
+# Rerunning: covariate_model_building() won't overwrite an earlier search, so remove this
+# section's own earlier projects first
+unlink(file.path(work, c("search_scm", "search_cossac", "search_scm.mlxtran", "search_cossac.mlxtran")),
+       recursive = TRUE)
+searches <- list()
+for (method in c("SCM", "COSSAC")) {
+  lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))
+  apply_scenario(cfg$scenario)
+  proj <- file.path(work, paste0("search_", tolower(method), ".mlxtran"))
+  show_conditions(covariate_model_building(proj, method = method, covariates = c("tlr7", "vac"),
+                                           parameters = c("ta", "NPs"), scenario = cfg$scenario,
+                                           config = cfg_groups))
+  # Record: any WARNING or MESSAGE about useSambaBeforeCossac, or about the strategy name
+  lixoftConnectors::loadProject(proj)
+  searches[[method]] <- show_conditions(lixoftConnectors::getModelBuildingResults())
+  cat(method, ": ", length(searches[[method]]), " models, best: ",
+      sum(vapply(searches[[method]], function(x) isTRUE(x$bestModel), logical(1))), "\n", sep = "")
+}
+# Expect: for each method, models > 0 and exactly 1 best (resolve_candidates() assumes this)
+str(searches$COSSAC[[1]], max.level = 2)   # Expect: same fields as SCM (BICc, LL, tested, individualModels, bestModel)
+list.files(file.path(work, c("search_scm", "search_cossac")), pattern = "\\.(html|mlxtran)$", recursive = TRUE)
+# Expect: final_model.mlxtran and final_model/<SCM or COSSAC>_final_model_report.html in each
+# Open both reports: "Report groups: tlr7, vac", prediction plots coloured by group, stratified VPC
+cfg_both <- cfg; cfg_both$step3_model_building$method <- list("SCM", "COSSAC")
+cands <- show_conditions(resolve_candidates(cfg_both, searches))
+str(cands)   # Expect: scm_best, scm_delta2, cossac_best (duplicates dropped, with a message)
+
 # sink()   # if logging

@@ -54,3 +54,25 @@ test_that("model comparison plots build from compare_models output", {
   expect_s3_class(plot_model_comparison(cmp), "ggplot")
   expect_null(plot_treatment_pvalues(cmp))
 })
+
+test_that("plot_individual_fits shows every run and censored observations as open circles", {
+  fit <- data.frame(id = rep(1:2, each = 3), time = rep(c(0, 4, 8), 2), y = c(1, 2, 3, 1, 2, 3),
+                    popPred = 1, indivPred_mode = 1.5, censored = c(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE))
+  indivFit <- rbind(transform(fit, run = 1), transform(fit, run = 2, indivPred_mode = 2))
+  te <- data.frame(run = c(1, 2), bicc = c(10, 5))
+  p <- plot_individual_fits(indivFit, te)
+  b <- ggplot2::ggplot_build(p)
+  layers <- vapply(p$layers, function(l) class(l$geom)[1], "")
+  expect_equal(unname(layers), c("GeomLine", "GeomLine", "GeomPoint"))
+  expect_equal(unique(b$data[[1]]$colour), "grey70")       # run 1 drawn as another run
+  expect_equal(sort(unique(b$data[[3]]$shape)), c(1, 16))  # open circles for censored
+  expect_match(p$labels$caption, "Best run: 2")
+  # without the censored column: plain points; without other runs: no grey layer
+  p2 <- plot_individual_fits(indivFit[indivFit$run == 2, names(indivFit) != "censored"], te)
+  expect_equal(length(p2$layers), 2)
+})
+
+test_that("package plots use theme_report", {
+  p <- ggplot_report(data.frame(x = 1), ggplot2::aes(x, x))
+  expect_equal(p$theme$panel.grid.minor, ggplot2::element_blank())
+})

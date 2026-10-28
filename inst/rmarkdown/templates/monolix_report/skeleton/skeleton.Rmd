@@ -27,11 +27,7 @@ theme_set(theme_classic() +
             theme(panel.grid.major = element_line(),
                   panel.grid.minor = element_line(),
                   strip.background = element_blank()))
-# The report's own plots all use theme_report (minimal; groups coloured with Dark2)
-theme_report <- theme_minimal() +
-  theme(panel.grid.minor = element_blank(),
-        strip.text = element_text(face = "bold"),
-        strip.background = element_rect(fill = "grey95", color = NA))
+# The report's own plots use the package's theme_report() (groups coloured with Dark2)
 
 # Show a Monolix plot or table, or a note when it isn't available for this project
 # (e.g. no censored data for the BLQ check), instead of failing the whole report
@@ -169,7 +165,7 @@ if (can_plot) {
     geom_line(aes(group = id), linewidth = 1, alpha = 0.6) +
     group_colors +
     labs(x = "Time", y = obs, color = "Group", title = "Population predictions for each group") +
-    theme_report
+    theme_report()
 }
 ```
 
@@ -184,7 +180,7 @@ if (can_plot) {
     group_colors +
     labs(x = "Time", y = obs, color = "Group",
          title = paste0("Individual predictions (", attr(fits, "indiv_column"), ")")) +
-    theme_report
+    theme_report()
 }
 ```
 
@@ -217,7 +213,7 @@ if (!is.null(model_vars) && nrow(model_vars)) {
     labs(x = "Time", y = NULL,
          title = paste0("Individual predictions of the model variables (", vars_prediction, ")"),
          subtitle = vars_subtitle) +
-    theme_report +
+    theme_report() +
     theme(legend.position = "none")
 }
 ```
@@ -317,7 +313,7 @@ if (!is.null(FIM)) {
     geom_text(data = . %>% filter(abs(value) > 0.5), aes(label = round(value, 2)), size = 1.7) +
     labs(fill = "correlation", x = "", y = "") +
     scale_fill_gradient2(low = "blue", high = "red", mid = "white", limits = c(-1.1, 1.1)) +
-    theme_report +
+    theme_report() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 } else {
   cat("Standard errors not estimated.\n")
@@ -358,7 +354,7 @@ pairs_plot <- function(df, prefix = "") {
   cols <- intersect(paste0(prefix, names(indiv_model$distribution)), names(df))
   ggpairs(df, columns = cols, progress = FALSE,
           diag = list(continuous = function(data, mapping) ggplot(data, mapping) + geom_histogram(fill = "black", bins = 30))) +
-    theme_report
+    theme_report()
 }
 show_or_note(pairs_plot(getSimulatedIndividualParameters()))
 ```

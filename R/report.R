@@ -182,3 +182,26 @@ read_simulated_variables <- function(results_dir) {
   attr(out, "prediction") <- c(mlx_EBEs = "mode", mlx_CondMean = "mean")[[sims$parameters[1]]]
   out
 }
+
+#' Which observations are censored
+#'
+#' From the data's `cens` column (Monolix header type `cens`), one row per
+#' individual and time with an observation, for joining onto predictions.txt.
+#'
+#' @param data The analysis data set.
+#' @param header,header_types Column names and their Monolix header types
+#'   (as from `lixoftConnectors::getData()`).
+#' @return Data frame with the id column (named as in `data`), `time` and
+#'   `censored` (logical); `NULL` when the data has no `cens` column.
+#' @export
+censoring_table <- function(data, header, header_types) {
+  col <- function(type) header[header_types == type][1]
+  id <- col("id"); time <- col("time"); cens <- col("cens"); obs <- col("observation")
+  if (is.na(cens) || is.na(id) || is.na(time)) return(NULL)
+  d <- data
+  if (!is.na(obs)) d <- d[!is.na(d[[obs]]), , drop = FALSE]
+  out <- stats::aggregate(list(censored = d[[cens]] != 0 & !is.na(d[[cens]])),
+                          by = list(id = d[[id]], time = d[[time]]), FUN = any)
+  names(out)[1] <- id
+  out[order(out[[id]], out$time), , drop = FALSE]
+}

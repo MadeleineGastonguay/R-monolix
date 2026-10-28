@@ -7,9 +7,7 @@
   conditional-mode individual estimates.)
 
 ## Check on the computer where Monolix works
-Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still open:
-- `create_project()` stopping on a rejected model has only been tested with mocks; run it once
-  through `setup_project()` with the `a`-named model from section 12.
+Results are in `dev/monolix_check_results.md`; all checks 0–15, 17 and 18 are done.
 
 ## Found in the Monolix checks
 - (Done: `validate_config()` catches structural parameters named like error parameters, and
@@ -23,15 +21,15 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
 - In a new project, standard errors and log-likelihood are off by default; the package
   turns them on through `scenario`. Keep in mind when comparing with the SIV runs.
 
-## Check in the next Monolix round (step 5 code, tested only on fake results)
-- `save_igs_diagnostics()` on a real IGS result: every output writes, and the shrinkage
-  parameter names Monolix uses map onto the `omega_` rows of `identifiability_summary()`.
-- `plot_individual_fits()` guesses the observation column of predictions.txt (the one column
-  that isn't id, time or a prediction); check it on real output, including censored data.
-- `compare_models()` reads Wald p-values from `getTests()$wald` by the `p.value` column (as the
-  SIV script did); confirm the column name.
-- Whether Monolix also rejects structural parameters named `b` or `c` with a constant error
-  model. `validate_config()` rejects a, b and c to be safe.
+## Check in the next Monolix round
+- Rerun section 16 of `dev/monolix_checks.R` (Wald tests and `compare_models()`): it stopped at
+  the first IGS run of the model with a treatment effect ("No sampling range for
+  beta_ta_vac_1", now fixed). Confirms the column names of `getTests()$wald`.
+- Rerun sections 15 and 18: `plot_individual_fits()` now draws every IGS run (grey) with the
+  best run in colour, and censored observations as open circles (the IGS adds a `censored`
+  column from the data); the model-building reports get the config's groups (`config =`).
+- Whether Monolix rejects a structural parameter named `c`: the section 17 test model already
+  defines a constant `c`, so it failed for that reason. `a` and `b` are rejected.
 
 ## Report (rendered with Monolix 2024R1 on the synthetic data; see dev/monolix_check_results.md)
 - Simulx simulation of the model variables: not checked for models with doses or regressors
@@ -47,11 +45,8 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
   <= 0.95) returned no runs when the best run alone carried more than 95% of the weight.
 
 ## Covariate search options (method: none, SCM, COSSAC or both)
-- Check on Monolix: `covariate_model_building(method = "COSSAC")` runs, and
-  `getModelBuildingResults()` from COSSAC has the same shape as SCM's (one entry with
-  `bestModel = TRUE`), which `resolve_candidates()` assumes. `strategy` is now passed in lower
-  case ("scm", "cossac") as `?getModelBuildingSettings` lists it; "SCM" also worked in check 9.
-- `covariate_model_building()` sets `useSambaBeforeCossac`, which isn't among the setting names
-  Monolix 2024R1 returned (check 8). Check it's ignored, or remove it.
+- (Done, check 18: SCM and COSSAC run through `covariate_model_building()` with lower-case
+  `strategy`; COSSAC's results have SCM's shape with one best model; `useSambaBeforeCossac`
+  gives no warning or message. It isn't a Monolix 2024R1 setting, so it could be removed.)
 - The driver (step 7) must give SCM and COSSAC their own project files so their ModelBuilding
   folders and final_model.mlxtran don't collide.

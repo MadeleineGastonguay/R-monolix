@@ -44,7 +44,7 @@ plot_model_building <- function(mb,  ...){
     filter(param != "") %>% 
     group_by(n_covar) %>% mutate(best = BICc == min(BICc)) %>% 
     ungroup %>% group_by(param, treatment) %>% mutate(final_mod = any(best)) %>% 
-    ggplot(aes(BICc, treatment, color = param)) + 
+    ggplot_report(aes(BICc, treatment, color = param)) + 
     geom_rect(data = . %>% filter(best), 
               aes(xmin = BICc, xmax = BICc + 2, ymin = -Inf, ymax = Inf), 
               fill = "grey", alpha = 0.25, color = NA) +

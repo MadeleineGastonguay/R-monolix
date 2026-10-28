@@ -199,3 +199,40 @@ paired with the right individuals. Simulx warns at import: "For mlx_EBEs and mlx
 IDs should be ticked ..." and "mlx_PopUncertainSA has not been created because there are NaNs
 in the RSE". Neither matters here: the simulation uses the EBEs, which already include
 covariate effects, not the covariate or uncertainty elements.
+
+# Round 4: report fixes and step 5 code (sections 13, 15–18; log `dev/monolix_check_output5.log`, 2026-10-28)
+
+## 13. Report fixes
+Confirmed on the real render: the population trends plot has a separate curve for vac = 1
+(popPred), the random-effects pairs plot is drawn, and no section shows "Not available".
+
+## 15. Step 5 diagnostics on a real IGS result
+`save_igs_diagnostics()`: all 15 outputs written (13 PDFs, 3 CSVs). `identifiability_summary()`
+puts shrinkage on every `omega_` row (Monolix names them `lambda`, `betas`, ...).
+`observation_column()` finds `vl`. ggplot warned that 4 points were removed as missing or out
+of range in a plot; check `individual_fits.pdf` for censored observations.
+
+## 16. Wald tests and compare_models()
+**Failed:** the base model's IGS ran, but the first run of the ta ~ vac model stopped with
+"No sampling range for beta_ta_vac_1". `sampling_ranges()` gives treatment effects no range, so
+`draw_initial_values()` needed `set_treatment`. **Fixed:** a `beta_` without `set_treatment` or
+a range now starts at 0, as in `set_base()`; the other draws are unchanged. Test added. Rerun
+section 16 to check the Wald column names and `compare_models()`.
+
+## 17. Rejected parameter names
+- `setup_project()` with a structural parameter `a` now stops with "Monolix could not create
+  the project from .../model_param_a.txt" (the create_project() fix, confirmed on Monolix).
+- `b` is rejected too ("Name 'b' is already used as error parameter"), even with a constant
+  error model.
+- `c`: inconclusive. The test model already defines a constant `c = 23`, so Monolix reported
+  "Conflicting variable definition for 'c'".
+
+## 18. Covariate search through the package
+SCM (8 models) and COSSAC (3 models) both ran through `covariate_model_building()` with
+`strategy` in lower case; each has exactly one `bestModel = TRUE`, and COSSAC's entries have
+the same fields as SCM's. No warning or message about `useSambaBeforeCossac`. Both chose
+`ta ~ vac`; `resolve_candidates()` kept `scm_best` and dropped `scm_delta2` and `cossac_best`
+as duplicates, with the message and a warning that only 1 distinct candidate is left. The
+best-model reports are in `search_scm/final_model/SCM_final_model_report.html` and
+`search_cossac/final_model/COSSAC_final_model_report.html` (the check's expectation said
+`<search>/`; corrected).

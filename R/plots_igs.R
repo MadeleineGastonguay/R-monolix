@@ -43,14 +43,14 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
   
   if(narrow){
     estimates_vs_bicc <- tabestimates %>%
-      ggplot(aes(estimate, bicc, fill = color)) +
+      ggplot_report(aes(estimate, bicc, fill = color)) +
       geom_point(alpha = 0.75, size = point_size, shape = 21) 
       
       if(add_best) estimates_vs_bicc <- estimates_vs_bicc + geom_point(data = . %>% filter(bicc == min(bicc)), size = point_size+1, shape = 24)
   }else{
     estimates_vs_bicc <- tabestimates %>%
       # mutate(param = factor(param, levels = popparams$name)) %>%
-      ggplot(aes(estimate, bicc,  fill = color)) +
+      ggplot_report(aes(estimate, bicc,  fill = color)) +
       geom_point(alpha = 0.75, shape = 21, size =  point_size + 1) +
       geom_hline(yintercept = BICc_threshold, lty = "dashed", alpha = 0.5) + 
       labs(caption = paste0("Dashed line indicates BICc below which fall the most probable models\n", caption))
@@ -140,7 +140,7 @@ plot_distributions <- function(initialvalues, tabestimates, out_folder = "", pro
     pivot_longer(c(initial_value, estimate)) %>% 
     mutate(name = factor(name, levels = c("initial_value", "estimate"), labels = c("Initial Value", "Final Estimate")),
            param = factor(param, levels = popparams$name)) %>% 
-    ggplot(aes(name, value)) + geom_violin(scale = "width") + 
+    ggplot_report(aes(name, value)) + geom_violin(scale = "width") + 
     facet_wrap(~param, scales = "free_y") +
     geom_boxplot(position = position_dodge(width=0.9), width = 0.1, fill = "white", outlier.shape = NA) +
     geom_beeswarm(aes( fill = bicc, color = bicc, group = name), size = 2, alpha = 0.75, shape = 21) + 
@@ -194,7 +194,7 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
   if(is.null(parameter)){
     plots <- lapply(params, function(p){
       df %>% filter(param == p) %>% 
-        ggplot(aes(initial_value, estimate, fill = bicc, shape = bicc == min(bicc))) + 
+        ggplot_report(aes(initial_value, estimate, fill = bicc, shape = bicc == min(bicc))) + 
         geom_point(size = 2, alpha = 0.75) + 
         geom_point(data = . %>% filter(bicc == min(bicc)), size = 2) + 
         coord_obs_pred() +
@@ -220,7 +220,7 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
     
     plot <- df %>% 
       filter(param == parameter) %>% 
-      ggplot(aes(initial_value, estimate, fill = bicc, shape = bicc == min(bicc))) + 
+      ggplot_report(aes(initial_value, estimate, fill = bicc, shape = bicc == min(bicc))) + 
       geom_point(size = 2, alpha = 0.75) + 
       geom_point(data = . %>% filter(bicc == min(bicc)), size = 2) + 
       coord_obs_pred() +
@@ -265,7 +265,7 @@ cor_iv_estimates <- function(tabestimates, initialvalues, out_folder, project_na
   breaks <- seq(breaks[1], breaks[2], by = 2)
   
   plot <- df %>% 
-    ggplot(aes(cor, fct_rev(parameter), fill = log10(pval), shape = pval <= 0.05)) + 
+    ggplot_report(aes(cor, fct_rev(parameter), fill = log10(pval), shape = pval <= 0.05)) + 
     geom_vline(xintercept = 0, lty = "dashed") + 
     geom_point(size = 3) + 
     xlim(c(-1,1)) + 
@@ -308,7 +308,7 @@ correlate_estimates <- function(tabestimates, method = "spearman", out_folder = 
   correlation_heatmap <- correlation_df %>% 
     mutate(parameter2 = factor(parameter2, levels = popparams$name),
            parameter1 = factor(parameter1, levels = popparams$name)) %>%
-    ggplot(aes(parameter1, parameter2, fill = value)) + 
+    ggplot_report(aes(parameter1, parameter2, fill = value)) + 
     geom_tile() + 
     geom_text(data = . %>% filter(abs(value) >= label_threshold, parameter1 != parameter2),
               aes(label = round(value, 2)), color = text_color) +
@@ -351,7 +351,7 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
     pivot_wider(names_from = param, values_from = estimate) %>% 
     GGally::ggpairs(columns = 3:ncol(.), 
                     lower = list(continuous = function(data, mapping){
-                      ggplot(data, mapping) + 
+                      ggplot_report(data, mapping) + 
                         geom_point(aes(fill = bicc, shape = bicc == min(bicc)), alpha = 0.75) + 
                         geom_point(data = . %>% filter(bicc == min(bicc)), aes(fill = bicc, shape = bicc == min(bicc)), size = 2) + 
                         scale_fill_viridis_c(direction = -1) + 
@@ -360,6 +360,7 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
                     } 
                     )
     ) + 
+    theme_report() +
     labs(caption = caption) 
   
   if(out_folder != ""){
@@ -396,7 +397,7 @@ calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name =
   
   cv <- cv %>% pivot_longer(!param) %>% 
     mutate(param = factor(param, levels = popparams$name)) %>% 
-    ggplot(aes(factor(param), abs(value), fill = name)) + 
+    ggplot_report(aes(factor(param), abs(value), fill = name)) + 
     geom_col(position = position_dodge(),alpha = 0.7) + 
     geom_text(aes(label = abs(round(value, 2))), position = position_dodge(width = 0.91), hjust = -0.1) + 
     labs(x = "Parameter", y = "Absolute Value of Coefficient of Variation", caption = caption, title = "Comparing CV of initial values and final estimates") + 
@@ -445,7 +446,7 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
       if(!is.null(filter)) temp <- temp %>% filter(iteration-phase >= filter)
       
       plotList[[i]] <- temp %>% 
-        ggplot( aes(x = iteration-phase, y = !!sym(param))) +
+        ggplot_report( aes(x = iteration-phase, y = !!sym(param))) +
         geom_line(aes(group = run, color = bicc)) +
         theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
         # geom_vline(xintercept = changePhase, color = 1:length(changePhase)) +
@@ -472,7 +473,7 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
     if(!is.null(filter)) temp <- temp %>% filter(iteration-phase >= filter)
     
     plot <- temp %>% 
-      ggplot( aes(x = iteration-phase, y = !!sym(parameter))) +
+      ggplot_report( aes(x = iteration-phase, y = !!sym(parameter))) +
       geom_line(aes(group = run, color = bicc)) +
       theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
       labs( x = "Iteration - phase switch", y = "Estimate") + 
@@ -525,7 +526,7 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
     for (param in popparams$name) {
       if (popparams[popparams$name == param, ]$method == "FIXED") next
       estimates <- tabestimates[tabestimates$param == param, ]
-      plotList[[i]] <- ggplot(estimates %>% filter(run %in% unique(tabestimates$run)), 
+      plotList[[i]] <- ggplot_report(estimates %>% filter(run %in% unique(tabestimates$run)), 
                               aes(x = run, y = estimate, color = bicc)) +
         geom_point() +
         geom_errorbar(aes(ymax = estimate * (1+as.numeric(rse)/100), 
@@ -543,7 +544,7 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
     plot <- grid.arrange(grobs = plotList, ncol = 5)
   }else{
     estimates <- tabestimates[tabestimates$param == parameter, ]
-    plot <- ggplot(estimates %>% filter(run %in% unique(tabestimates$run)), 
+    plot <- ggplot_report(estimates %>% filter(run %in% unique(tabestimates$run)), 
                    aes(x = run, y = estimate, color = bicc)) +
       geom_point() +
       geom_errorbar(aes(ymax = estimate * (1+as.numeric(rse)/100), 
@@ -604,7 +605,7 @@ estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_est
                                          parameters[grepl("omega", parameters)],
                                          parameters[grepl("beta_", parameters)],
                                          parameters[ parameters == "a"]))) %>% 
-    ggplot(aes(factor(parameter), estimate)) + 
+    ggplot_report(aes(factor(parameter), estimate)) + 
     geom_boxplot() + 
     geom_text(data = CV, aes(y = Inf, label = CV), vjust = 1) +
     annotate("text", -Inf, Inf, label = "CV (%)", vjust = 1, hjust = 0) +
@@ -775,7 +776,7 @@ plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = 
     mutate(color = fct_inorder(case_when(rse < 50~"<50", 
                                          rse >= 50 & rse < 100~ "50-100",
                                          rse > 100~ ">100"))) %>% 
-    ggplot(aes(abs(rse), y, color = color)) +  
+    ggplot_report(aes(abs(rse), y, color = color)) +  
     geom_point() + 
     scale_x_log10() + 
     facet_wrap(~parameter, scales = scales) + 

@@ -13,13 +13,17 @@ covariate_model_building(
   relationships = NULL,
   parameters = NULL,
   lrt_thresold = c(0.05, 0.01),
-  scenario = NULL
+  scenario = NULL,
+  config = NULL
 )
 }
 \arguments{
 \item{scenario}{Optional \code{scenario} section of the config, used when the
 best model's tasks have to be rerun. \code{NULL} runs every task without
 linearization, as the SIV code did.}
+
+\item{config}{Optional analysis config; the best model's report is grouped
+and coloured by \code{report.stratify_by} (see \code{\link[=generate_report]{generate_report()}}).}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R. Results go to

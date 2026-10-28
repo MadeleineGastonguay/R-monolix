@@ -4,7 +4,8 @@
 # One set of initial values, one per population parameter. Same rules and RNG use as the
 # SIV initial_guess_sampling() loop:
 # fixed value > error-parameter start > log-uniform (if in log10) > set_variance for omegas and
-# error parameters > set_treatment for betas > uniform.
+# error parameters > set_treatment for betas > uniform. A beta without set_treatment or a
+# sampling range starts at 0 (no effect), as in set_base(); sampling_ranges() gives betas none.
 draw_initial_values <- function(param_names, ranges, log10 = NULL, fixed = NULL, set_error = NULL,
                                 set_variance = NULL, set_treatment = NULL) {
   vapply(param_names, function(j) {
@@ -18,6 +19,8 @@ draw_initial_values <- function(param_names, ranges, log10 = NULL, fixed = NULL,
       set_variance
     } else if (grepl("beta_", j) && !is.null(set_treatment)) {
       set_treatment
+    } else if (grepl("beta_", j) && !j %in% rownames(ranges)) {
+      0
     } else {
       if (!j %in% rownames(ranges)) stop("No sampling range for ", j, call. = FALSE)
       runif(1, ranges[j, 1], ranges[j, 2])
@@ -44,7 +47,8 @@ draw_initial_values <- function(param_names, ranges, log10 = NULL, fixed = NULL,
 #'   ([error_starts()]).
 #' @param set_variance Starting value for every `omega_*` (and error parameters
 #'   without a `set_error` value), instead of sampling.
-#' @param set_treatment Starting value for every `beta_*`.
+#' @param set_treatment Starting value for every `beta_*`. Without it, a
+#'   `beta_*` with no sampling range starts at 0.
 #' @param seed Seed for the draws (`NULL` leaves the RNG alone).
 #' @return Data frame with `parameter`, `run`, `initial_value`.
 #' @export
