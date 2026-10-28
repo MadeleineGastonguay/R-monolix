@@ -43,3 +43,13 @@ test_that("is_error_param picks out error-model parameters", {
   expect_equal(is_error_param(c("a", "b", "a_y1", "k_pop", "omega_k", "beta_k_sex_1", "corr_k_v")),
                c(TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE))
 })
+
+test_that("create_project stops when Monolix rejects the model", {
+  # Seen with real Monolix: a structural parameter named `a` makes newProject() print
+  # "[ERROR] Name 'a' is already used as error parameter" and return FALSE, with no R error
+  skip_if_not(monolix_available())
+  local_mocked_bindings(newProject = function(...) FALSE, .package = "lixoftConnectors")
+  expect_error(create_project("model_param_a.txt", "data.txt", headerTypes = c("id", "time", "observation"),
+                              error_model = "constant", exclude_random_effects = NULL),
+               "could not create the project from model_param_a.txt")
+})

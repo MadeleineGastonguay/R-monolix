@@ -7,14 +7,26 @@
   conditional-mode individual estimates.)
 
 ## Check on the computer where Monolix works
-- `setup_project()` / `create_project()` with `distributions` and `estimation` from a config.
-- `set_project_settings()` with SAEM and task settings from the config.
-- `scenario`: what `getScenario()` shows right after `newProject()`, i.e. which tasks the SIV
-  runs actually had. The package defaults to every task on except `plots`; check that reports
-  still render with `plots: false`, and that `linearization: true` runs end to end.
-- The Monolix version recorded in `run_log.yaml` (`getLixoftConnectorsState(quietly = TRUE)$version`).
-- How Monolix names error-model parameters when there are several observation columns
-  (`model.error_initial` keys aren't checked against the error model until then; the default
-  starting values go by first letter: a/c = 1, b = 0.3).
-- Whether a structural-model parameter can be named `a`, `b` or `c` (not on the reserved-keyword
-  list, but it would clash with the error-model parameter names).
+Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still open:
+- `create_project()` stopping on a rejected model has only been tested with mocks; run it once
+  through `setup_project()` with the `a`-named model from section 12.
+
+## Found in the Monolix checks
+- Monolix rejects a structural parameter named like an error parameter (`a`, `b`, `c`, or
+  `a1`, `b1` … with several observations). Catch this in `validate_config()` /
+  `draft_config()` before Monolix is called.
+- `getPopulationParameterEstimationSettings()` returns lowercase names (`nbburningiterations`
+  …), while the setter takes the camelCase ones. Use lowercase names in any code that reads
+  settings back (e.g. the run log).
+- `init_monolix()` drops the theophylline estimates from `check_installation()`, so nothing
+  shows the demo ran. Print them, or return them invisibly.
+- `model.error_initial` keys: with several observations Monolix names error parameters
+  `a1`, `b1`, `c1`, `a2`, … (letter plus observation number). Check the keys against these
+  names in `validate_config()`.
+- Write `scm_truncated_model()` against `tests/testthat/fixtures/scm_results_synthetic.rds`:
+  `tested` is the pair added at each step, `individualModels` the full covariate model, one
+  entry has `bestModel = TRUE`.
+- `initial_guess_sampling()`: an error in one optional record step (condition number, table)
+  skips the record steps after it for that run. Consider a separate `tryCatch` per record step.
+- In a new project, standard errors and log-likelihood are off by default; the package
+  turns them on through `scenario`. Keep in mind when comparing with the SIV runs.

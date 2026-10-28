@@ -3,7 +3,8 @@
 # and lixoftConnectors:: prefixes.
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
 # folder (no globals); attempt cap and seed in initial_guess_sampling(); only missing betas
-# set to 0 in set_base(); fixed Monolix seed; BICc as default model-building criterion.
+# set to 0 in set_base(); fixed Monolix seed; BICc as default model-building criterion;
+# create_project() stops when newProject() fails.
 
 #' Set scenario tasks and SAEM settings for the loaded project
 #'
@@ -57,12 +58,17 @@ create_project <- function(model_file, data_file,
                            normal_dist = NULL, fixed = NULL,
                            linearize = FALSE, distributions = NULL, estimation = NULL, scenario = NULL){
   
-  # Create a new project
-  lixoftConnectors::newProject(modelFile = model_file,
+  # Create a new project. newProject() reports failures as a message and returns FALSE
+  # instead of raising an error, so check its value.
+  created <- lixoftConnectors::newProject(modelFile = model_file,
              data = list(dataFile = data_file,
                          headerTypes = headerTypes
              )
   )
+  if (isFALSE(created)) {
+    stop("Monolix could not create the project from ", model_file,
+         "; see the [ERROR] message above.", call. = FALSE)
+  }
   
   # Set Error model
   lixoftConnectors::setErrorModel(error_model)

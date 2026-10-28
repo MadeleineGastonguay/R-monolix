@@ -100,3 +100,14 @@ test_that("result_methods maps linearization to Monolix's method names", {
   expect_equal(result_methods(TRUE), list(se = "linearization", ll = "linearization"))
   expect_equal(result_methods(FALSE), list(se = "stochasticApproximation", ll = "importanceSampling"))
 })
+
+test_that("condition number is NA, not an error, when the correlation matrix has nan", {
+  # Seen with real Monolix: m_pop's standard error was nan, so its correlation row was all nan
+  ok <- matrix(c(1, 0.5, 0.5, 1), 2, dimnames = list(c("k_pop", "v_pop"), c("k_pop", "v_pop")))
+  expect_equal(condition_number_of(ok), 1.5 / 0.5)
+  bad <- ok; bad["v_pop", ] <- NaN; bad[, "v_pop"] <- NaN
+  expect_output(cn <- condition_number_of(bad, run = 2), "run 2.*\\(v_pop\\)")
+  expect_identical(cn, NA_real_)
+  expect_identical(condition_number_of(NULL), NA_real_)
+  expect_equal(condition_number_of(as.data.frame(ok)), 3)
+})

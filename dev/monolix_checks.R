@@ -3,6 +3,8 @@
 # Self-contained: uses only files in this repo. Writes to a temporary folder, and in section 9
 # to tests/testthat/fixtures/.
 
+# Optional: setwd() to the repo root, and log printed output to a file Claude can read
+# (not committed): sink("dev/monolix_check_output.log", split = TRUE)
 # 0. Setup ####
 stopifnot(R.version$arch == "x86_64")   # lixoftConnectors needs x86_64 R
 Sys.getenv("MONOLIX_PATH")              # Expect: the Monolix install path, e.g.
@@ -10,7 +12,9 @@ Sys.getenv("MONOLIX_PATH")              # Expect: the Monolix install path, e.g.
 # If empty: add MONOLIX_PATH=... to ~/.Renviron and restart R.
 
 devtools::load_all()
-init_monolix()   # Expect: theophylline demo estimates printed (installation check)
+init_monolix()   # Expect: no error (runs the theophylline demo; estimates aren't printed)
+# Without MONOLIX_PATH, pass the path, e.g.
+# init_monolix("/Applications/MonolixSuite2024R1.app/Contents/Resources/monolixSuite/")
 
 # A config for the test model + synthetic data, with short SAEM settings so fits are quick
 work <- file.path(tempdir(), "monolix_checks")
@@ -49,9 +53,10 @@ lixoftConnectors::getScenario()
 setup_project(spec)
 lixoftConnectors::getScenario()
 # Expect: tasks as in cfg$scenario (all TRUE except plots), linearization FALSE
-lixoftConnectors::getPopulationParameterEstimationSettings()[c("nbBurningIterations", "nbExploratoryIterations",
-                                                               "nbSmoothingIterations", "smoothingAlpha")]
-# Expect: 5, 50, 20, 0.7
+str(lixoftConnectors::getPopulationParameterEstimationSettings())
+# Expect: burn-in 5, exploratory 50, smoothing 20, smoothing alpha 0.7, both autostops TRUE.
+# The names come back differently from the camelCase ones setup_project() sets
+# (first run gave NULL when subsetting by camelCase), so this prints them all; note the names.
 lixoftConnectors::getProjectSettings()
 # Expect: seed = 123456 (if the field is named differently, note its name)
 lixoftConnectors::getIndividualParameterModel()$distribution
@@ -149,7 +154,13 @@ m <- readLines(file.path(work, "2regime_model_delay.txt"))
 m <- sub("input = {lambda,betas,ta,NPs,p,m}", "input = {lambda,betas,ta,NPs,p,a}", m, fixed = TRUE)
 m <- gsub("\\bm\\b", "a", m)
 writeLines(m, file.path(work, "model_param_a.txt"))
-try(lixoftConnectors::newProject(modelFile = file.path(work, "model_param_a.txt"),
-                                 data = list(dataFile = spec$data_file, headerTypes = spec$header_types)))
-try(lixoftConnectors::getPopulationParameterInformation()$name)
+# sink() only captures printed output, so errors, warnings and messages are printed explicitly
+show_conditions <- function(expr) withCallingHandlers(
+  tryCatch(expr, error = function(e) cat("ERROR:", conditionMessage(e), "\n")),
+  warning = function(w) { cat("WARNING:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") },
+  message = function(m) { cat("MESSAGE:", conditionMessage(m)); invokeRestart("muffleMessage") })
+print(show_conditions(lixoftConnectors::newProject(modelFile = file.path(work, "model_param_a.txt"),
+                                                   data = list(dataFile = spec$data_file, headerTypes = spec$header_types))))
+print(show_conditions(lixoftConnectors::getPopulationParameterInformation()$name))
 # Record: whether newProject fails, or what the error parameter and a_pop are called
+# sink()   # if logging

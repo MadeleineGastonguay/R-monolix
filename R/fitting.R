@@ -4,7 +4,8 @@
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
 # folder (no globals); seed and predefined-run handling in initial_guess_sampling();
 # results read with the scenario's method (linearization or not); final_model.mlxtran always saved; only missing betas
-# set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method.
+# set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method;
+# condition number is NA instead of an error when the correlation matrix has nan.
 
 #' Fit the loaded project from many sampled initial values
 #'
@@ -156,11 +157,7 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
       
       # Get condition number if specified:
       if(record_condition_number){
-        FIM <- lixoftConnectors::getCorrelationOfEstimates()[[methods$se]]
-        condition_number <- if(is.null(FIM)) NA_real_ else {
-          eigenvalues <- eigen(FIM)$values
-          max(eigenvalues)/min(eigenvalues)
-        }
+        condition_number <- condition_number_of(lixoftConnectors::getCorrelationOfEstimates()[[methods$se]], run = i)
         condition_numbers <- rbind(condition_numbers, data.frame(run = i, condition_number = condition_number))  
       }
       

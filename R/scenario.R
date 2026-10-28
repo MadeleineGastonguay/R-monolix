@@ -80,3 +80,22 @@ read_shrinkage <- function(run) {
   data.frame(run = run, parameter = params, conditionalMean = col("conditionalMean"),
              conditionalMode = col("conditionalMode"), conditionalDist = col("conditionalDist"))
 }
+
+# Ratio of largest to smallest eigenvalue of the correlation matrix of the estimates.
+# NA (with a note) when the matrix is missing or has non-finite entries, e.g. when Monolix
+# returns nan for a parameter whose standard error can't be estimated.
+condition_number_of <- function(corr, run = NULL) {
+  if (is.null(corr)) return(NA_real_)
+  m <- as.matrix(corr)
+  if (!all(is.finite(m))) {
+    # a parameter without a standard error makes its whole row and column nan, which touches
+    # every row, so name only those whose own (diagonal) entry is non-finite
+    bad <- rownames(m)[!is.finite(diag(m))]
+    cat("Condition number not computed", if (!is.null(run)) paste0("for run ", run),
+        "- correlation matrix has non-finite values",
+        if (length(bad)) paste0("(", paste(bad, collapse = ", "), ")"), "\n")
+    return(NA_real_)
+  }
+  ev <- eigen(m, symmetric = TRUE, only.values = TRUE)$values
+  max(ev) / min(ev)
+}
