@@ -10,9 +10,13 @@ profile_likelihood(
   igs,
   nits,
   use_estimates_as_ig = F,
-  linearize = F,
+  linearize = NULL,
   record_predictions = F
 )
+}
+\arguments{
+\item{linearize}{\code{NULL} (default) uses the project's scenario; \code{TRUE} or
+\code{FALSE} overrides it.}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.

@@ -4,7 +4,16 @@
 \alias{set_project_settings}
 \title{Set scenario tasks and SAEM settings for the loaded project}
 \usage{
-set_project_settings(linearize = FALSE)
+set_project_settings(linearize = FALSE, estimation = NULL, scenario = NULL)
+}
+\arguments{
+\item{linearize}{Used only when \code{scenario} is \code{NULL}.}
+
+\item{estimation}{The \code{estimation} section of the config (see
+\code{\link[=config_defaults]{config_defaults()}}); \code{NULL} uses the defaults.}
+
+\item{scenario}{The \code{scenario} section of the config; \code{NULL} uses the
+default tasks with \code{linearization = linearize}.}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.

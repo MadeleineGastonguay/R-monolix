@@ -10,6 +10,7 @@ initial_guess_sampling(
   nits = 100,
   set_variance = NULL,
   set_treatment = NULL,
+  set_error = NULL,
   record_shrinkage = FALSE,
   fixed = NULL,
   predefined_initialvalues = NULL,
@@ -21,6 +22,11 @@ initial_guess_sampling(
 )
 }
 \arguments{
+\item{set_error}{Named starting values for error-model parameters (see
+\code{\link[=error_starts]{error_starts()}}). They are still estimated; only the start is set. If
+\code{NULL}, error parameters follow \code{set_variance} or their sampling range, as
+in the SIV code.}
+
 \item{predefined_initialvalues}{Optional table of initial values (columns
 \code{parameter}, \code{run}, \code{initial_value}), e.g. shared across candidate models in
 step 4. When given, each predefined set is fitted exactly once, under its own

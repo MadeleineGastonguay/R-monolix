@@ -2,7 +2,8 @@
 # Behaviour unchanged apart from: package template path, file.path() instead of here(),
 # and lixoftConnectors:: prefixes.
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
-# folder (no globals); seed and predefined-run handling in initial_guess_sampling(); only missing betas
+# folder (no globals); seed and predefined-run handling in initial_guess_sampling();
+# results read with the scenario's method (linearization or not); final_model.mlxtran always saved; only missing betas
 # set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method.
 
 #' Fit the loaded project from many sampled initial values
@@ -14,10 +15,14 @@
 #'   step 4. When given, each predefined set is fitted exactly once, under its own
 #'   run number, and `nits` is ignored. Failed runs are not replaced, so paired
 #'   comparisons only use the runs that succeeded in every model.
+#' @param set_error Named starting values for error-model parameters (see
+#'   [error_starts()]). They are still estimated; only the start is set. If
+#'   `NULL`, error parameters follow `set_variance` or their sampling range, as
+#'   in the SIV code.
 #' @param seed Seed for sampling initial values (`NULL` leaves the RNG alone).
 #' @export
 initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
-                                   nits = 100, set_variance = NULL, set_treatment = NULL,
+                                   nits = 100, set_variance = NULL, set_treatment = NULL, set_error = NULL,
                                    record_shrinkage = FALSE,
                                    fixed = NULL, predefined_initialvalues = NULL,
                                    record_pvals = FALSE, record_indiv_params = FALSE,
@@ -28,6 +33,7 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
   if(!is.null(seed)) set.seed(seed)
 
   popparams <- lixoftConnectors::getPopulationParameterInformation()
+  methods <- result_methods()  # linearization or not, from the project's scenario
 
   estimates <- tabestimates <- tabiters <-  phase <- initialvalues <- shrinkage_df <- treatment_pvals <- indivParams <- predictions <- condition_numbers <- table_predictions <- NULL;
 
@@ -52,6 +58,8 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
       popini <- sapply(popparams$name, function(j){
         if(j %in% names(fixed)){
           unlist(fixed)[[j]]
+        }else if(is_error_param(j) && j %in% names(set_error)){
+          set_error[[j]] # same start every run; still estimated
         }else if(j %in% log10){
           # If sampling over orders of magnitude, sample from log10 space
           10^(runif(1, log10(initialValue_ranges[j,1]), log10(initialValue_ranges[j,2])))
@@ -95,15 +103,15 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
       # store the estimates and s.e. in a table
       estimates <- as.data.frame(lixoftConnectors::getEstimatedPopulationParameters())
       names(estimates) <- "estimate"
-      rses <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation$rse
-      names(rses) <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation$parameter
-      rses <- data.frame(rse = rses)
+      # standard errors and likelihood from the method the scenario uses
+      rses <- data.frame(rse = read_rses(methods, rownames(estimates)), row.names = rownames(estimates))
       estimates <- merge(estimates, rses, by = "row.names")
       estimates$run <- i
-      estimates$ofv <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[1]
-      estimates$aic <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[2]
-      estimates$bic <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[3]
-      estimates$bicc <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling[4]
+      ll <- read_likelihood(methods)
+      estimates$ofv <- ll[["ofv"]]
+      estimates$aic <- ll[["aic"]]
+      estimates$bic <- ll[["bic"]]
+      estimates$bicc <- ll[["bicc"]]
       names(estimates)[names(estimates) == "Row.names"] <- "parameter"
       tabestimates <- rbind(tabestimates, estimates)
       
@@ -143,37 +151,16 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
       
       # Get shrinkage for individual parameters if specified
       if(record_shrinkage){
-        shrinkage <- lixoftConnectors::getEtaShrinkage()
-        if(any(!lixoftConnectors::getIndividualParameterModel()$variability$id)){
-          shrinkage_df <- rbind(
-            shrinkage_df,
-            data.frame(
-              run = i,
-              parameter = shrinkage$conditionalMean$parameters,
-              conditionalMean = unlist(unname(shrinkage$conditionalMean[1,-1])),
-              conditionalMode = unlist(unname(shrinkage$conditionalMode[1,-1])),
-              conditionalDist = unlist(unname(shrinkage$conditionalDist[1,-1]))
-            )
-          )
-        }else{
-          shrinkage_df <- rbind(
-            shrinkage_df,
-            data.frame(
-              run = i,
-              parameter = shrinkage$conditionalMean$parameters,
-              conditionalMean = shrinkage$conditionalMean$shrinkage,
-              conditionalMode = shrinkage$conditionalMode$shrinkage,
-              conditionalDist = shrinkage$conditionalDist$shrinkage
-            )
-          )
-        }
+        shrinkage_df <- rbind(shrinkage_df, read_shrinkage(i))
       }
       
       # Get condition number if specified:
       if(record_condition_number){
-        FIM <- lixoftConnectors::getCorrelationOfEstimates()$stochasticApproximation
-        eigenvalues <- eigen(FIM)$values
-        condition_number <- max(eigenvalues)/min(eigenvalues)
+        FIM <- lixoftConnectors::getCorrelationOfEstimates()[[methods$se]]
+        condition_number <- if(is.null(FIM)) NA_real_ else {
+          eigenvalues <- eigen(FIM)$values
+          max(eigenvalues)/min(eigenvalues)
+        }
         condition_numbers <- rbind(condition_numbers, data.frame(run = i, condition_number = condition_number))  
       }
       
@@ -253,8 +240,11 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
 #' Profile likelihood for one population parameter
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#'
+#' @param linearize `NULL` (default) uses the project's scenario; `TRUE` or
+#'   `FALSE` overrides it.
 #' @export
-profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = F, record_predictions = F){
+profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL, record_predictions = F){
   
   values <- seq(range[1], range[2], length.out = nits)
   
@@ -273,15 +263,13 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
   
   initialValues[initialValues$name == parameter, "method"] <- "FIXED"
   
-  if(linearize){
+  # linearize = NULL keeps the project's scenario; TRUE/FALSE overrides it
+  if(!is.null(linearize)){
     scenario <- lixoftConnectors::getScenario()
-    scenario$linearization <- TRUE
-    lixoftConnectors::setScenario(scenario)
-  }else{
-    scenario <- lixoftConnectors::getScenario()
-    scenario$linearization <- FALSE
+    scenario$linearization <- linearize
     lixoftConnectors::setScenario(scenario)
   }
+  methods <- result_methods()
   
   tabestimates <- NULL
   predictions <- NULL
@@ -301,21 +289,12 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
       lixoftConnectors::runScenario()
       
       # Get standard errors and likelihoods:
-      if(linearize){
-        SEs <- lixoftConnectors::getEstimatedStandardErrors()$linearization
-        likelihoods <- lixoftConnectors::getEstimatedLogLikelihood()$linearization
-      }else{
-        SEs <- lixoftConnectors::getEstimatedStandardErrors()$stochasticApproximation
-        likelihoods <- lixoftConnectors::getEstimatedLogLikelihood()$importanceSampling
-      }
-      
-      
+      likelihoods <- read_likelihood(methods)
+
       # store the estimates and s.e. in a table
       estimates <- as.data.frame(lixoftConnectors::getEstimatedPopulationParameters())
       names(estimates) <- "estimate"
-      rses <- SEs$rse
-      names(rses) <- SEs$parameter  
-      rses <- data.frame(rse = rses)
+      rses <- data.frame(rse = read_rses(methods, rownames(estimates)), row.names = rownames(estimates))
       estimates <- merge(estimates, rses, by = "row.names")
       estimates$profiled_parameter <- parameter
       estimates$profiled_value <- value
@@ -370,9 +349,14 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 #' Run Monolix covariate model building (SCM or COSSAC)
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#'
+#' @param scenario Optional `scenario` section of the config, used when the
+#'   best model's tasks have to be rerun. `NULL` runs every task without
+#'   linearization, as the SIV code did.
 #' @export
 covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
-                                     linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01)){
+                                     linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01),
+                                     scenario = NULL){
   
   if(dir.exists(file.path(gsub(".mlxtran","",projectFile), "ModelBuilding"))){ 
     stop("Model building directory already exists. Aborting to avoid overwriting previous results.")
@@ -418,16 +402,22 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
   lixoftConnectors::loadProject(final_projectFile)
   
   if(any(as.character(unlist(lixoftConnectors::getLaunchedTasks())) == "FALSE")){
-    scenario <- lixoftConnectors::getScenario()
-    scenario$tasks[] <- TRUE
-    scenario$linearization <- FALSE
-    lixoftConnectors::setScenario(scenario)
-    
+    # rerun with the analysis scenario (or, without one, every task as in the SIV code)
+    if(is.null(scenario)){
+      sc <- lixoftConnectors::getScenario()
+      sc$tasks[] <- TRUE
+      sc$linearization <- FALSE
+      lixoftConnectors::setScenario(sc)
+    }else{
+      apply_scenario(scenario)
+    }
+
     lixoftConnectors::runScenario()
     lixoftConnectors::computeChartsData()
-    
-    lixoftConnectors::saveProject( file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"))
   }
+
+  # always save, so the report below has a project to read
+  lixoftConnectors::saveProject( file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"))
   
   # Generate report with results
   generate_report(project_file = file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"), 

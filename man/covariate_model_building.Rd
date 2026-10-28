@@ -12,8 +12,14 @@ covariate_model_building(
   linearization = FALSE,
   relationships = NULL,
   parameters = NULL,
-  lrt_thresold = c(0.05, 0.01)
+  lrt_thresold = c(0.05, 0.01),
+  scenario = NULL
 )
+}
+\arguments{
+\item{scenario}{Optional \code{scenario} section of the config, used when the
+best model's tasks have to be rerun. \code{NULL} runs every task without
+linearization, as the SIV code did.}
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.

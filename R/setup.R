@@ -8,39 +8,54 @@
 #' Set scenario tasks and SAEM settings for the loaded project
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#'
+#' @param linearize Used only when `scenario` is `NULL`.
+#' @param estimation The `estimation` section of the config (see
+#'   [config_defaults()]); `NULL` uses the defaults.
+#' @param scenario The `scenario` section of the config; `NULL` uses the
+#'   default tasks with `linearization = linearize`.
 #' @export
-set_project_settings <- function(linearize = FALSE){
+set_project_settings <- function(linearize = FALSE, estimation = NULL, scenario = NULL){
+  require_monolix()
+  if(is.null(estimation)) estimation <- config_defaults()$estimation
+  if(is.null(scenario)){
+    scenario <- config_defaults()$scenario
+    scenario$linearization <- linearize
+  }
+  saem <- estimation$saem
+
   # Set scenario for Monolix
-  scenario <- lixoftConnectors::getScenario()
-  scenario$tasks["standardErrorEstimation"] <- TRUE
-  scenario$tasks["logLikelihoodEstimation"] <- TRUE
-  scenario$linearization <- linearize
-  lixoftConnectors::setScenario(scenario)
+  apply_scenario(scenario)
   
-  # Set Parameter Estimation Settings
   # One fixed Monolix seed so SAEM runs are reproducible
   lixoftConnectors::setProjectSettings(seed = MONOLIX_SEED)
   
+  # Set Parameter Estimation Settings
   lixoftConnectors::setPopulationParameterEstimationSettings(
-    nbBurningIterations=50,
-    nbExploratoryIterations=1000,
-    nbSmoothingIterations=500,
-    smoothingAlpha=0.7,
-    exploratoryAutoStop = TRUE,
-    smoothingAutoStop = TRUE
+    nbBurningIterations = saem$burn_in,
+    nbExploratoryIterations = saem$exploratory,
+    nbSmoothingIterations = saem$smoothing,
+    smoothingAlpha = saem$smoothing_alpha,
+    exploratoryAutoStop = isTRUE(saem$exploratory_autostop),
+    smoothingAutoStop = isTRUE(saem$smoothing_autostop)
   )
   
 }
 
 #' Create a new Monolix project from a model file, data file and statistical model
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' Ported from the SIV_HIV_rebound_kinetics functions.R. With a config, use
+#' [setup_project()] instead, which takes everything from a [model_spec()].
+#'
+#' @param distributions Named character vector or list of parameter
+#'   distributions, e.g. `c(ta = "normal")`.
+#' @param estimation,scenario Passed to [set_project_settings()].
 #' @export
 create_project <- function(model_file, data_file, 
                            headerTypes, error_model, 
                            exclude_random_effects, treatment_effects = NULL, 
                            normal_dist = NULL, fixed = NULL,
-                           linearize = FALSE){
+                           linearize = FALSE, distributions = NULL, estimation = NULL, scenario = NULL){
   
   # Create a new project
   lixoftConnectors::newProject(modelFile = model_file,
@@ -68,10 +83,12 @@ create_project <- function(model_file, data_file,
     lixoftConnectors::setCovariateModel(covariateModel)
   }
   
-  if(!is.null(normal_dist)){
-    distributions <- lixoftConnectors::getIndividualParameterModel()$distribution
-    distributions[normal_dist] <- "normal"
-    lixoftConnectors::setIndividualParameterDistribution(distributions)
+  # `distributions` (named, e.g. c(ta = "normal")) generalizes `normal_dist`
+  if(!is.null(normal_dist) || length(distributions) > 0){
+    current <- lixoftConnectors::getIndividualParameterModel()$distribution
+    current[normal_dist] <- "normal"
+    current[names(distributions)] <- unlist(distributions)
+    lixoftConnectors::setIndividualParameterDistribution(current)
   }
   
   if(!is.null(fixed)){
@@ -84,7 +101,7 @@ create_project <- function(model_file, data_file,
   
   print(lixoftConnectors::getIndividualParameterModel())
   
-  set_project_settings(linearize)
+  set_project_settings(linearize, estimation, scenario)
   
 }
 
