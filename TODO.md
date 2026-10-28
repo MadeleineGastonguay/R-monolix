@@ -42,9 +42,6 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
 - Report sections from the pipeline's own results (IGS ranges, SCM table, model comparison)
   aren't in the template yet; it reports one Monolix project.
 
-## Decide later
-- `get_narrow_ranges()` now always keeps the best run. The SIV rule (cumulative weight
-  <= 0.95) returned no runs when the best run alone carried more than 95% of the weight.
 
 ## Covariate search options (method: none, SCM, COSSAC or both)
 - Check on Monolix: `covariate_model_building(method = "COSSAC")` runs, and
@@ -53,5 +50,19 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
   case ("scm", "cossac") as `?getModelBuildingSettings` lists it; "SCM" also worked in check 9.
 - `covariate_model_building()` sets `useSambaBeforeCossac`, which isn't among the setting names
   Monolix 2024R1 returned (check 8). Check it's ignored, or remove it.
-- The driver (step 7) must give SCM and COSSAC their own project files so their ModelBuilding
-  folders and final_model.mlxtran don't collide.
+- (Done: the driver gives SCM and COSSAC their own projects, search/scm.mlxtran and
+  search/cossac.mlxtran.)
+
+## Step 8: run the pipeline for real (on the Monolix computer)
+The driver (R/pipeline.R, inst/scripts/run_pipeline.R) is tested only with a fake Monolix.
+- Run inst/examples/synthetic end to end through all three checkpoints (small settings already
+  in its analysis.yaml), then once with `method: [SCM, COSSAC]` and once with `method: none`.
+- Check that `saveProject()` to a new file moves the results folder with it, as
+  `save_project_as()` assumes (the IGS reads predictions.txt from the project's folder).
+- Step 3's `relationships` is passed to Monolix as written in the YAML; check the format
+  `getModelBuildingSettings()$relationships` expects.
+- Step 4 has no per-model cache: if it stops partway, the models already fitted are refitted.
+  Consider resuming from the saved <model>_igs.rds files.
+- The final model has no run log; after changing step 4, rerun it with rerun = "final".
+- Generality: step 1 on Monolix's theophylline demo with only a new analysis.yaml.
+- `devtools::check()`.

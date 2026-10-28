@@ -10,9 +10,12 @@
 #'
 #' @param config Output of [read_analysis_config()].
 #' @param step 1 to 4.
+#' @param before_checkpoint Leave out the decision made partway through the
+#'   step (step 3's `candidate_models`), for the part of the step that runs
+#'   before it (the covariate search).
 #' @return Nested list.
 #' @export
-step_settings <- function(config, step) {
+step_settings <- function(config, step, before_checkpoint = FALSE) {
   stopifnot(step %in% 1:4)
   model <- config$model[c("error_model", "error_initial", "random_effects_excluded", "distributions")]
   out <- list(
@@ -27,7 +30,10 @@ step_settings <- function(config, step) {
     out$decisions <- list(fixed = config$decisions$fixed)
     out$step2_igs <- config$step2_igs
   }
-  if (step >= 3) out$step3_model_building <- config$step3_model_building
+  if (step >= 3) {
+    s3 <- config$step3_model_building
+    out$step3_model_building <- if (step == 3 && before_checkpoint) s3[setdiff(names(s3), "candidate_models")] else s3
+  }
   if (step >= 4) {
     s4 <- config$step4_model_comparison
     out$step4_model_comparison <- s4[setdiff(names(s4), c("final_model", "final_rationale"))]
@@ -45,9 +51,10 @@ step_settings <- function(config, step) {
 #' @param step 1 to 4.
 #' @param dir Folder of the step's results.
 #' @param extra Optional named list of anything else to record.
+#' @inheritParams step_settings
 #' @return Path to the log, invisibly.
 #' @export
-write_run_log <- function(config, step, dir, extra = list()) {
+write_run_log <- function(config, step, dir, extra = list(), before_checkpoint = FALSE) {
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   log <- list(
     step = step,
@@ -62,7 +69,7 @@ write_run_log <- function(config, step, dir, extra = list()) {
       lixoftConnectors = if (monolix_available()) as.character(utils::packageVersion("lixoftConnectors")) else NULL,
       monolix = monolix_version() %||% config$monolix$version
     ),
-    settings = step_settings(config, step),
+    settings = step_settings(config, step, before_checkpoint),
     extra = extra,
     session_info = utils::capture.output(utils::sessionInfo())
   )
@@ -80,12 +87,12 @@ write_run_log <- function(config, step, dir, extra = list()) {
 #' @inheritParams write_run_log
 #' @return `TRUE` if a matching log exists, `FALSE` if there is no log yet.
 #' @export
-check_run_log <- function(config, step, dir) {
+check_run_log <- function(config, step, dir, before_checkpoint = FALSE) {
   path <- file.path(dir, "run_log.yaml")
   if (!file.exists(path)) return(FALSE)
   log <- yaml::read_yaml(path, handlers = yaml_handlers())
   then <- c(flatten_settings(log$settings), flatten_settings(list(files = log$files)))
-  now <- c(flatten_settings(yaml_roundtrip(step_settings(config, step))),
+  now <- c(flatten_settings(yaml_roundtrip(step_settings(config, step, before_checkpoint))),
            flatten_settings(list(files = file_hashes(config))))
   keys <- union(names(then), names(now))
   differ <- keys[vapply(keys, function(k) !identical(then[[k]], now[[k]]), logical(1))]

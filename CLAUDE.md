@@ -25,7 +25,10 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
   SIV `functions.R` (bug fixes noted at the top of each file). `config.R`, `draft_config.R`,
   `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
   `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `report.R`,
-  `simulx.R` are new.
+  `simulx.R`, `pipeline.R` are new.
+- `R/pipeline.R`: one function per step (`run_step1()` … `run_final_model()`, `run_pipeline()`).
+  `inst/scripts/run_pipeline.R` is the driver script; `inst/examples/synthetic/` is an example
+  config on the synthetic data. Pipeline tests use a fake Monolix (`helper-pipeline.R`).
 - `inst/rmarkdown/templates/monolix_report/`: HTML report template, rendered by `generate_report()`
   in an environment whose parent is the package namespace (it uses package helpers directly).
   Groups, labels and rescaling come from `report.*` and `model.report_transforms` in the config;

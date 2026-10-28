@@ -4,12 +4,16 @@
 \alias{step_settings}
 \title{Settings that affect the results of a step}
 \usage{
-step_settings(config, step)
+step_settings(config, step, before_checkpoint = FALSE)
 }
 \arguments{
 \item{config}{Output of \code{\link[=read_analysis_config]{read_analysis_config()}}.}
 
 \item{step}{1 to 4.}
+
+\item{before_checkpoint}{Leave out the decision made partway through the
+step (step 3's \code{candidate_models}), for the part of the step that runs
+before it (the covariate search).}
 }
 \value{
 Nested list.
