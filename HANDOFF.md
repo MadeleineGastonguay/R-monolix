@@ -1,51 +1,50 @@
-# Handoff: Monolix checks
+# Handoff: Monolix checks done
 
-Steps 1-4 of the plan were built on a computer where lixoftConnectors doesn't work, so every
-Monolix call has only been tested with mocks. This round checks them against real Monolix on a
-computer where it works, before steps 5-7 (summaries, SCM-based candidates, report, driver) are
-built on top. Read `CLAUDE.md` first for the rules.
+The Monolix checks in `dev/monolix_checks.R` (sections 0–12) were run against real Monolix
+(MonolixSuite2024R1, lixoftConnectors 2024.1, R 4.4.0 x86_64) on 2026-10-27. Everything passes
+or is recorded. Two package bugs turned up and are fixed. Work can move on to steps 5–7
+(summaries, SCM-based candidates, report, driver). Read `CLAUDE.md` first for the rules.
 
-## Prompt to start the session
-> Read CLAUDE.md and HANDOFF.md, then help me run the Monolix checks in dev/monolix_checks.R
-> section by section and record the results.
+## Prompt to start the next session
+> Read CLAUDE.md, HANDOFF.md and dev/monolix_check_results.md, then continue with the next
+> step of the plan.
 
-## Before running
-1. `git pull` on the `package-skeleton` branch.
-2. Open R and check `R.version$arch` is `x86_64`.
-3. Check these packages are installed (don't install without asking): devtools, testthat,
-   roxygen2, yaml, gt, rmarkdown, lixoftConnectors, plus the Imports in `DESCRIPTION`.
-   `devtools::load_all()` lists any that are missing.
-4. Set `MONOLIX_PATH` in `~/.Renviron` to the Monolix install folder, then restart R.
+## Where things are
+- `dev/monolix_check_results.md`: per-section results, including the default scenario,
+  model-building criterion values, error-parameter names and the SCM results structure.
+- `TODO.md`: what's still open and what the checks found.
+- `tests/testthat/fixtures/scm_results_synthetic.rds` (and `_str.txt`): real
+  `getModelBuildingResults()` output from the synthetic data, for writing `scm_truncated_model()`.
 
-## The checks (`dev/monolix_checks.R`)
-Each section prints what to look for after `# Expect:` or `# Record:`.
+## Bugs fixed (commit 25dce6e)
+1. **Condition number in `initial_guess_sampling()`.** When a parameter's standard error is
+   `nan`, its row and column of the correlation matrix are `nan`, and `eigen()` errored. That
+   also skipped reading `table_predictions` for the run. The new helper `condition_number_of()`
+   (`R/scenario.R`) returns `NA` and prints which parameter caused it. Confirmed on a real run.
+2. **`create_project()` ignored a failed `newProject()`.** Monolix reports a rejected model
+   (e.g. a structural parameter named `a`) as an `[ERROR]` message and returns `FALSE`, with no
+   R error, so the pipeline failed later with "No project loaded". It now stops right away.
+   Tested with mocks only.
 
-| # | Check | Why |
-|---|---|---|
-| 1 | Unit tests with lixoftConnectors installed | mocked tests that were skipped or untested before |
-| 2 | Default scenario of a new project | what the SIV runs used for tasks the scripts didn't set |
-| 3 | `setup_project()` from a config | scenario, SAEM settings and seed reach Monolix |
-| 4 | 3-run `initial_guess_sampling()` | results read correctly: RSE, BICc, shrinkage, condition number, predictions |
-| 5 | Same seed twice | the fixed Monolix seed makes runs reproducible |
-| 6 | `linearization: true` | results read from the linearization method |
-| 7 | Run log | Monolix version recorded |
-| 8 | Model-building settings | accepted `criterion` values ("BIC" = BICc) |
-| 9 | Small SCM on the synthetic data | saves real `getModelBuildingResults()` output as a test fixture for `scm_truncated_model()` |
-| 10 | Report with `plots: false` | report renders; template not generalized yet, so note failures |
-| 11 | Error-parameter names with 2 observations (optional) | so `model.error_initial` keys can be checked |
-| 12 | Structural parameter called `a` (optional) | whether it clashes with the error parameter |
+Both have tests; 147 tests pass.
 
-The script uses only files in this repo (the test model and synthetic data). It writes to a
-temporary folder, and in section 9 saves two fixture files to `tests/testthat/fixtures/`.
+## Findings to keep in mind for steps 5–7
+- Error parameters are named `a`, `b`, `c` with one observation, and `a1`, `b1`, `c1`, `a2` …
+  with several. Monolix rejects structural parameters with those names.
+- `getPopulationParameterEstimationSettings()` returns lowercase names (`nbburningiterations`);
+  the setter takes the camelCase ones.
+- Model-building `criterion` is `"BIC"` (gives BICc) or `"LRT"`.
+- In `getModelBuildingResults()`, `tested` is the pair added at each step, `individualModels`
+  is the full covariate model, and one entry has `bestModel = TRUE`.
 
-## When a check fails
-- If the cause is small and clearly in this package (e.g. a wrong lixoftConnectors field name),
-  fix it, add or update a test, and list the fix in the results.
-- Otherwise don't fix it; record it in the results and in `TODO.md`.
-
-## Reporting back
-1. Write `dev/monolix_check_results.md`: for each section, pass/fail and anything recorded
-   (default scenario, criterion values, error-parameter names, failures with messages).
-2. Update `TODO.md`: remove items that are now confirmed, add anything new.
-3. Commit (with Maddie's OK) and push to `package-skeleton`, so the work can continue on the
-   other computer with `git pull`.
+## Running Monolix code on the Mac (Maddie's iMac)
+- macOS kills any R process that Claude Code starts once lixoftConnectors loads Monolix
+  ("SIGKILL (Code Signature Invalid)"), so Claude can't run Monolix code there. Maddie runs it
+  in her own R session (RStudio), from the repo root, and logs output with
+  `sink("dev/monolix_check_output.log", split = TRUE)`. Claude reads the log. Logs aren't
+  committed.
+- `sink()` only captures printed output. Print errors, warnings and messages explicitly
+  (see `show_conditions()` in section 12 of the check script).
+- `MONOLIX_PATH` isn't set there; pass the path to `init_monolix()` or add it to `~/.Renviron`.
+- pkgload was updated to 1.5.3 in the x86_64 R there, because 1.3.4 broke
+  `devtools::load_all()` with rlang 1.1.6.
