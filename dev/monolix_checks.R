@@ -1,15 +1,13 @@
 # Checks that need a working Monolix install. Run section by section from the repo root,
 # in x86_64 R, and compare with "Expect:" in each section. See HANDOFF.md.
-# Writes only to a temporary folder and to tests/testthat/fixtures/ (section 9).
+# Self-contained: uses only files in this repo. Writes to a temporary folder, and in section 9
+# to tests/testthat/fixtures/.
 
 # 0. Setup ####
 stopifnot(R.version$arch == "x86_64")   # lixoftConnectors needs x86_64 R
 Sys.getenv("MONOLIX_PATH")              # Expect: the Monolix install path, e.g.
 # "/Applications/MonolixSuite2024R1.app/Contents/Resources/monolixSuite/"
 # If empty: add MONOLIX_PATH=... to ~/.Renviron and restart R.
-
-# Path to the SIV project on this computer (read only; used in section 9)
-siv_root <- "~/Proj/SIV_HIV_rebound_kinetics"
 
 devtools::load_all()
 init_monolix()   # Expect: theophylline demo estimates printed (installation check)
@@ -107,17 +105,27 @@ lixoftConnectors::getModelBuildingSettings()
 # Record: the value of $criterion, and which values ?getModelBuildingSettings / ?runModelBuilding
 # say are allowed. The package passes "BIC" for BICc.
 
-# 9. Real model-building results as a test fixture ####
-# scm_truncated_model() (next step) reads getModelBuildingResults(). Save the real structure from
-# an existing SIV SCM run. Loading the project only reads it; don't run or save anything there.
-scm_project <- file.path(siv_root, "results_eclipse", "study2", "SCM.mlxtran")   # adjust if needed
-lixoftConnectors::loadProject(scm_project)
+# 9. Model-building results as a test fixture ####
+# scm_truncated_model() (next step) reads getModelBuildingResults(). Run a small SCM on the
+# synthetic data (2 covariates x 2 parameters, short SAEM) and save its results as a fixture.
+lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))
+apply_scenario(cfg$scenario)
+lixoftConnectors::saveProject(file.path(work, "scm_check.mlxtran"))
+set <- lixoftConnectors::getModelBuildingSettings()
+names(set)   # Record: the setting names (the package sets strategy, criterion, covariates, parameters, useLin)
+set$strategy <- "SCM"
+set$criterion <- "BIC"
+set$useLin <- FALSE
+set$covariates <- c("tlr7", "vac")
+if ("parameters" %in% names(set)) set$parameters <- c("ta", "NPs")
+lixoftConnectors::runModelBuilding(settings = set)
 mb <- lixoftConnectors::getModelBuildingResults()
+length(mb)
 str(mb[1:2], max.level = 3)
-# It holds parameter/covariate names, BICc and log-likelihood per tested model, not raw data.
-# Ask Maddie before committing it:
-# saveRDS(mb, "tests/testthat/fixtures/scm_results_study2.rds")
-# capture.output(str(mb, max.level = 4), file = "tests/testthat/fixtures/scm_results_study2_str.txt")
+# Expect: one entry per tested model, with the tested parameter/covariate, BICc and which model is best.
+saveRDS(mb, "tests/testthat/fixtures/scm_results_synthetic.rds")
+capture.output(str(mb, max.level = 4), file = "tests/testthat/fixtures/scm_results_synthetic_str.txt")
+# Both files come from the synthetic data only.
 
 # 10. Report with plots: false ####
 lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))

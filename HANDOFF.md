@@ -16,7 +16,6 @@ built on top. Read `CLAUDE.md` first for the rules.
    roxygen2, yaml, gt, rmarkdown, lixoftConnectors, plus the Imports in `DESCRIPTION`.
    `devtools::load_all()` lists any that are missing.
 4. Set `MONOLIX_PATH` in `~/.Renviron` to the Monolix install folder, then restart R.
-5. In `dev/monolix_checks.R`, set `siv_root` to where SIV_HIV_rebound_kinetics is on this computer.
 
 ## The checks (`dev/monolix_checks.R`)
 Each section prints what to look for after `# Expect:` or `# Record:`.
@@ -31,13 +30,13 @@ Each section prints what to look for after `# Expect:` or `# Record:`.
 | 6 | `linearization: true` | results read from the linearization method |
 | 7 | Run log | Monolix version recorded |
 | 8 | Model-building settings | accepted `criterion` values ("BIC" = BICc) |
-| 9 | Real `getModelBuildingResults()` | structure needed for `scm_truncated_model()` next; **ask before saving it to fixtures** |
+| 9 | Small SCM on the synthetic data | saves real `getModelBuildingResults()` output as a test fixture for `scm_truncated_model()` |
 | 10 | Report with `plots: false` | report renders; template not generalized yet, so note failures |
 | 11 | Error-parameter names with 2 observations (optional) | so `model.error_initial` keys can be checked |
 | 12 | Structural parameter called `a` (optional) | whether it clashes with the error parameter |
 
-The script writes only to a temporary folder (and, in section 9, to `tests/testthat/fixtures/`
-if Maddie agrees). Section 9 only loads an SIV project to read it; nothing there is run or saved.
+The script uses only files in this repo (the test model and synthetic data). It writes to a
+temporary folder, and in section 9 saves two fixture files to `tests/testthat/fixtures/`.
 
 ## When a check fails
 - If the cause is small and clearly in this package (e.g. a wrong lixoftConnectors field name),

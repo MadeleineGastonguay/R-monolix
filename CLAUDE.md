@@ -7,8 +7,9 @@ four-step workflow: (1) two-phase initial guess sampling (IGS) to check identifi
 SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlxtran model.
 
 ## Rules
-- **Never edit, move, delete or write into the SIV_HIV_rebound_kinetics project** (scripts,
-  models, data, results). Reading it is fine. Only files in this repo may be changed.
+- **The package is self-contained.** Code, tests, checks and examples use only files in this
+  repo. Don't read from, write to or refer to paths in the SIV_HIV_rebound_kinetics project or
+  any other folder outside the repo.
 - **Never install, update or upgrade an R package without asking first**, including packages
   pulled in as dependencies. Say which package is missing and what it blocks, and offer the
   command.
