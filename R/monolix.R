@@ -22,7 +22,9 @@ require_monolix <- function() {
 #' @param path Path to the Monolix installation. Defaults to the
 #'   `MONOLIX_PATH` environment variable so machine-specific paths stay out of
 #'   the analysis config.
-#' @param check If `TRUE`, run [check_installation()] afterwards.
+#' @param check If `TRUE`, run [check_installation()] afterwards and print the
+#'   demo estimates.
+#' @return Invisibly, the demo estimates (or `TRUE` when `check = FALSE`).
 #' @export
 init_monolix <- function(path = Sys.getenv("MONOLIX_PATH"), check = TRUE) {
   require_monolix()
@@ -31,8 +33,11 @@ init_monolix <- function(path = Sys.getenv("MONOLIX_PATH"), check = TRUE) {
          call. = FALSE)
   }
   lixoftConnectors::initializeLixoftConnectors(software = "monolix", path = path)
-  if (check) check_installation()
-  invisible(TRUE)
+  if (!check) return(invisible(TRUE))
+  est <- check_installation()
+  cat("Monolix works: theophylline demo estimates\n")
+  print(est)
+  invisible(est)
 }
 
 #' Check that Monolix runs, using the theophylline demo project

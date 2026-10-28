@@ -23,7 +23,8 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 ## Layout
 - `R/`: package code. `fitting.R`, `setup.R`, `selection.R` and `plots_*.R` are ported from the
   SIV `functions.R` (bug fixes noted at the top of each file). `config.R`, `draft_config.R`,
-  `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R` are new.
+  `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
+  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R` are new.
 - `inst/rmarkdown/templates/monolix_report/`: HTML report template (not generalized yet).
 - `tests/testthat/`: tests run without Monolix by mocking lixoftConnectors calls.
 - `archive/preliminary/`: an older, superseded version of the pipeline, kept for reference.
@@ -33,6 +34,8 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 ## Conventions
 - Settings live in `analysis.yaml` (see `config_defaults()`, `draft_config()`). `~` = not
   decided yet; `{}` = none. Run logs (`run_log.yaml`) are written by the pipeline, never edited.
+- Plotting and summary functions never call lixoftConnectors (checked by
+  `tests/testthat/test-no-monolix.R`), so they work on saved results without Monolix.
 - Column names in every table the package makes: `parameter`, `run`, `estimate`, `rse`, `ofv`,
   `aic`, `bic`, `bicc`, `initial_value`, `model`, `profiled_parameter`, `profiled_value`.
   Tables passed to Monolix keep Monolix's names (`name`, `initialValue`).

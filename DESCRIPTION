@@ -33,7 +33,9 @@ Imports:
     rmarkdown,
     yaml,
     rlang,
-    stats
+    stats,
+    utils,
+    grDevices
 Suggests:
     lixoftConnectors,
     Rsmlx,

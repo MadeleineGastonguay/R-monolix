@@ -2,16 +2,42 @@
 % Please edit documentation in R/plots_ranges.R
 \name{plot_parameter_ranges}
 \alias{plot_parameter_ranges}
-\title{Plot sampling and estimate ranges for each IGS step}
+\title{Sampling and estimate ranges across the two IGS phases}
 \usage{
 plot_parameter_ranges(
-  initialValue_ranges,
-  log10_tabestimates,
-  tabestimates = NULL,
-  p_threshold = NULL,
-  bicc_cutoff = NULL
+  wide_ranges,
+  wide_estimates,
+  narrow_ranges = NULL,
+  narrow_estimates = NULL,
+  p_threshold = 0.95,
+  report_transforms = NULL,
+  log_scale = TRUE
 )
 }
+\arguments{
+\item{wide_ranges}{Wide sampling ranges (row names = parameters, columns
+\code{min}, \code{max}, as from \code{\link[=sampling_ranges]{sampling_ranges()}}).}
+
+\item{wide_estimates}{\code{tabestimates} of the wide run.}
+
+\item{narrow_ranges}{Narrow sampling ranges (\code{\link[=get_narrow_ranges]{get_narrow_ranges()}} output);
+computed from \code{wide_estimates} with \code{p_threshold} when \code{NULL}.}
+
+\item{narrow_estimates}{\code{tabestimates} of the narrow run, optional.}
+
+\item{p_threshold}{Cumulative BICc weight for the best-supported runs.}
+
+\item{report_transforms}{\code{model.report_transforms} from the config: per
+parameter a \code{label} and an \code{expr} in \code{x} used to rescale values.}
+
+\item{log_scale}{Log10 x axis (only used when every value is positive).}
+}
+\value{
+A ggplot.
+}
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+For each \verb{_pop} parameter, one bar per row: the wide sampling range, the
+estimates of the wide run, the narrow sampling range, the estimates of the
+narrow run and those of its best-supported runs. A point marks the best
+estimate.
 }

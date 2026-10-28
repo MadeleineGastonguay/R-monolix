@@ -1,104 +1,73 @@
-# Ported from SIV_HIV_rebound_kinetics/scripts/functions.R (Dec 2024).
-# Behaviour unchanged apart from: package template path, file.path() instead of here(),
-# and lixoftConnectors:: prefixes.
+# Replaces the SIV plot_parameter_ranges() and plot_parameter_ranges_v2(): one function, with
+# labels and scaling from model.report_transforms instead of hardcoded NPs/betas.
 
-#' Plot sampling and estimate ranges for each IGS step
+#' Sampling and estimate ranges across the two IGS phases
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' For each `_pop` parameter, one bar per row: the wide sampling range, the
+#' estimates of the wide run, the narrow sampling range, the estimates of the
+#' narrow run and those of its best-supported runs. A point marks the best
+#' estimate.
+#'
+#' @param wide_ranges Wide sampling ranges (row names = parameters, columns
+#'   `min`, `max`, as from [sampling_ranges()]).
+#' @param wide_estimates `tabestimates` of the wide run.
+#' @param narrow_ranges Narrow sampling ranges ([get_narrow_ranges()] output);
+#'   computed from `wide_estimates` with `p_threshold` when `NULL`.
+#' @param narrow_estimates `tabestimates` of the narrow run, optional.
+#' @param p_threshold Cumulative BICc weight for the best-supported runs.
+#' @param report_transforms `model.report_transforms` from the config: per
+#'   parameter a `label` and an `expr` in `x` used to rescale values.
+#' @param log_scale Log10 x axis (only used when every value is positive).
+#' @return A ggplot.
 #' @export
-plot_parameter_ranges <- function(initialValue_ranges, log10_tabestimates, tabestimates = NULL, p_threshold = NULL, bicc_cutoff = NULL){
-  iv_range <- initialValue_ranges %>% t() %>% as.data.frame %>% set_names(c("min", "max")) %>% rownames_to_column("parameter")
-  log10_range <- log10_tabestimates %>% group_by(parameter) %>% summarise(min = min(estimate), max = max(estimate)) %>% ungroup
-  narrow_iv_range <- get_narrow_ranges(log10_tabestimates, p_threshold, bicc_cutoff) %>% select(-best)
-  df <- rbind(
-    iv_range %>% mutate(step = "1", range = "Initial Guess", parameter = paste(parameter, "pop", sep = "_")),
-    log10_range %>% mutate(step = "2", range = "Estimate Range"),
-    narrow_iv_range %>% mutate(step = "2", range = "Initial Guess")
-  ) %>% 
-    filter(grepl("pop", parameter))
-  if(!is.null(tabestimates)){
-    narrow_range <- tabestimates %>% group_by(parameter) %>% summarise(min = min(estimate), max = max(estimate)) %>% ungroup
-    best <- tabestimates %>% filter(bicc == min(bicc), grepl("pop", parameter)) %>% select(parameter, estimate)
-    df <- rbind(df, 
-                narrow_range %>% mutate(step = "3", range = "Estimate Range")
-    ) %>% 
-      filter(grepl("pop", parameter))
+plot_parameter_ranges <- function(wide_ranges, wide_estimates, narrow_ranges = NULL, narrow_estimates = NULL,
+                                  p_threshold = 0.95, report_transforms = NULL, log_scale = TRUE) {
+  span <- function(te, label) {
+    te %>% group_by(parameter) %>% summarise(min = min(estimate), max = max(estimate), .groups = "drop") %>%
+      mutate(range = label)
   }
-  
-  plot <- ggplot(df, aes(x= step, ymin = min, ymax = max, color = range)) + 
-    geom_linerange(linewidth = 2) + 
-    # geom_linerange(data = filter(df, space == "Narrow Range"), linewidth = 2) + 
-    facet_wrap(~parameter, scales = "free_y") + 
-    scale_y_log10() + 
-    scale_color_manual(values = c("gray", "darkred"))
-  
-  if(!is.null(tabestimates)){
-    plot <- plot + 
-      geom_point(data = best, aes(x = "3", y = estimate), 
-                 color = "darkgreen", inherit.aes = F, size = 2) +
-      geom_text(data = best, aes(x = "3", y = estimate, label = signif(estimate, 2)), 
-                color = "darkgreen", inherit.aes = F, fontface = 2, vjust = 0, hjust = 1)
+  wr <- data.frame(parameter = rownames(wide_ranges), min = wide_ranges[, 1], max = wide_ranges[, 2],
+                   range = "Wide: initial values")
+  if (is.null(narrow_ranges)) narrow_ranges <- get_narrow_ranges(wide_estimates, p_threshold = p_threshold)
+  df <- rbind(wr, span(wide_estimates, "Wide: estimates"),
+              data.frame(parameter = narrow_ranges$parameter, min = narrow_ranges$min, max = narrow_ranges$max,
+                         range = "Narrow: initial values"))
+  final <- wide_estimates
+  if (!is.null(narrow_estimates)) {
+    top <- calculate_BICw(narrow_estimates)
+    top_runs <- top$run[top$cumprob <= p_threshold | seq_len(nrow(top)) == 1]
+    df <- rbind(df, span(narrow_estimates, "Narrow: estimates"),
+                span(narrow_estimates[narrow_estimates$run %in% top_runs, ], "Narrow: best-supported runs"))
+    final <- narrow_estimates
   }
-  
+  best <- best_run_estimates(final)[, c("parameter", "estimate")]
+  df <- df[grepl("_pop$", df$parameter), ]
+  best <- best[best$parameter %in% df$parameter, ]
+
+  df$label <- df$parameter
+  best$label <- best$parameter
+  for (p in intersect(names(report_transforms), df$parameter)) {
+    rt <- report_transforms[[p]]
+    f <- function(x) eval_transform(rt$expr, x)
+    i <- df$parameter == p
+    df$min[i] <- f(df$min[i]); df$max[i] <- f(df$max[i]); df$label[i] <- rt$label %||% p
+    j <- best$parameter == p
+    best$estimate[j] <- f(best$estimate[j]); best$label[j] <- rt$label %||% p
+  }
+  lev <- c("Wide: initial values", "Wide: estimates", "Narrow: initial values", "Narrow: estimates",
+           "Narrow: best-supported runs")
+  df$range <- factor(df$range, levels = rev(lev))
+  best$range <- factor(if (is.null(narrow_estimates)) "Wide: estimates" else "Narrow: best-supported runs", levels = rev(lev))
+
+  plot <- ggplot(df, aes(y = range, xmin = min, xmax = max, color = range)) +
+    geom_linerange(linewidth = 2) +
+    geom_point(data = best, aes(x = estimate, y = range), inherit.aes = FALSE, size = 2) +
+    facet_wrap(~label, scales = "free_x") +
+    scale_color_manual(values = c("Wide: initial values" = "gray60", "Wide: estimates" = "gray30",
+                                  "Narrow: initial values" = "darkred", "Narrow: estimates" = "steelblue",
+                                  "Narrow: best-supported runs" = "darkgreen"), guide = "none") +
+    labs(x = NULL, y = NULL, caption = paste0("Point: best estimate. Best-supported runs: cumulative BICc weight <= ",
+                                              p_threshold, "."))
+  if (log_scale && all(c(df$min, df$max) > 0)) plot <- plot + scale_x_log10()
   plot
-  
 }
-
-#' Plot sampling and estimate ranges for each IGS step (publication version)
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
-#' @export
-plot_parameter_ranges_v2 <- function(initialValue_ranges, log10_tabestimates, tabestimates = NULL, p_threshold = NULL, bicc_cutoff = NULL){
-  iv_range <- initialValue_ranges %>% t() %>% as.data.frame %>% set_names(c("min", "max")) %>% rownames_to_column("parameter")
-  iv_range <- iv_range %>% mutate(min = ifelse(parameter == "NPs", min*1e5, min), max = ifelse(parameter == "NPs", max*1e5, max))
-  log10_tabestimates <- log10_tabestimates %>% mutate(estimate = ifelse(parameter == "NPs_pop", estimate*1e5, estimate)) 
-  log10_range <- log10_tabestimates %>% group_by(parameter) %>%  summarise(min = min(estimate), max = max(estimate)) %>% ungroup
-  narrow_iv_range <- get_narrow_ranges(log10_tabestimates, p_threshold, bicc_cutoff) %>% select(-best)
-  tabestimates_cut <- calculate_BICw(tabestimates) %>% filter(cumprob <= p_threshold) %>% pull(run)
-  df <- rbind(
-    iv_range %>% mutate(step = "1", range = "Initial Guess", parameter = paste(parameter, "pop", sep = "_")),
-    log10_range %>% mutate(step = "2", range = "Estimate Range"),
-    narrow_iv_range %>% mutate(step = "2", range = "Global Minimum")
-  ) %>% 
-    filter(grepl("pop", parameter))
-  if(!is.null(tabestimates)){
-    tabestimates <- tabestimates  %>% mutate(estimate = ifelse(parameter == "NPs_pop", estimate*1e5, estimate))
-    narrow_range <- tabestimates %>% group_by(parameter) %>% summarise(min = min(estimate), max = max(estimate)) %>% ungroup
-    best_range <- tabestimates %>% filter(run %in% tabestimates_cut) %>%
-      group_by(parameter) %>% summarise(min = min(estimate), max = max(estimate)) %>% ungroup 
-      
-    best <- tabestimates %>% filter(bicc == min(bicc), grepl("pop", parameter)) %>% select(parameter, estimate) %>% 
-      mutate(parameter = factor(parameter, levels = c("lambda_pop", "betas_pop", "ta_pop", "m_pop", "p_pop", "NPs_pop"),
-                                labels = c("lambda['pop']", "beta['pop']~' (x'~10^-7~')'", "t['a, pop']", "m['pop']", "p['pop']", "N['p, pop']")))
-    df <- rbind(df, 
-                narrow_range %>% mutate(step = "3", range = "Estimate Range"),
-                best_range %>% mutate(step = "3", range = "Best Candidates")
-    ) %>% 
-      filter(grepl("pop", parameter))
-  }
-  
-  plot <- df %>% mutate(range = factor(range, levels = c("Initial Guess", "Estimate Range", "Global Minimum", "Best Candidates")),
-                        step = factor(step, levels = rev(c("1", "2", "3")), labels =rev( c("Wide range of\ninitial conditions", "IGS from wide range", "IGS from 'good' range"))),
-                        parameter = factor(parameter, levels = c("lambda_pop", "betas_pop", "ta_pop", "m_pop", "p_pop", "NPs_pop"),
-                                           labels = c("lambda['pop']", "beta['pop']~' (x'~10^-7~')'", "t['a, pop']", "m['pop']", "p['pop']", "N['p, pop']"))) %>% 
-    # ggplot(aes(x= step, ymin = log10(min), ymax = log10(max), color = range)) + 
-    ggplot(aes(y= step, xmin = log10(min), xmax = log10(max), color = range)) + 
-    geom_linerange(linewidth = 2) + 
-    # geom_linerange(data = filter(df, space == "Narrow Range"), linewidth = 2) + 
-    facet_wrap(~parameter, scales = "free_x", nrow = 1, labeller = "label_parsed", strip.position = "bottom") + 
-    # scale_y_log10() + 
-    scale_color_manual(values = c("gray39", "gray", "darkred", "darkgreen")) + 
-    scale_x_continuous(labels = scales::label_math(10^.x))
-  
-  # if(!is.null(tabestimates)){
-  #   plot <- plot + 
-  #     geom_point(data = best, aes(y = "IGS from 'good' range", x = log10(estimate)), 
-  #                color = "black", inherit.aes = F, size = 2) +
-  #     geom_text(data = best, aes(y = "IGS from 'good' range", x = log10(estimate), label = signif(estimate, 2)), 
-  #               color = "black", inherit.aes = F, fontface = 2, vjust = 0, hjust = 1.1)
-  # }
-  # 
-  plot  + theme(strip.placement = "outside", axis.title = element_blank())
-  
-}
-

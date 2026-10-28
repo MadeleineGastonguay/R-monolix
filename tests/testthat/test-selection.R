@@ -6,13 +6,34 @@ test_that("calculate_BICw gives normalized weights ordered best first", {
   expect_equal(w$w[1] / w$w[2], exp(0.5 / 2))
 })
 
-test_that("get_narrow_ranges keeps runs within the cumulative weight and widens to [best/2, 2*best]", {
+test_that("get_narrow_ranges keeps runs within the cumulative weight", {
   r <- get_narrow_ranges(fake_tabestimates(), p_threshold = 0.95)
   k <- r[r$parameter == "k_pop", ]
-  # runs 1 and 2 carry ~95% of the weight; widening wins over their 1.0-1.2 span
-  expect_equal(k$best, 1.0)
-  expect_equal(k$min, 0.5)
-  expect_equal(k$max, 2.0)
+  # runs 1 and 2 carry ~95% of the weight
+  expect_equal(c(k$best, k$min, k$max), c(1.0, 1.0, 1.2))
+})
+
+test_that("min_fold_width widens ranges to at least [best/f, best*f]", {
+  r <- get_narrow_ranges(fake_tabestimates(), p_threshold = 0.95, min_fold_width = 2)
+  k <- r[r$parameter == "k_pop", ]
+  expect_equal(c(k$min, k$max), c(0.5, 2.0))  # the SIV rule
+  # a range already wider than the fold width is kept
+  r10 <- get_narrow_ranges(fake_tabestimates(), bicc_cutoff = 104, min_fold_width = 1.1)
+  expect_equal(r10$max[r10$parameter == "k_pop"], 3.0)
+})
+
+test_that("the best run is kept even when it alone has more weight than the threshold", {
+  te <- fake_tabestimates()
+  te$bicc[te$run != 1] <- te$bicc[te$run != 1] + 50
+  r <- get_narrow_ranges(te, p_threshold = 0.95)
+  expect_equal(r$min[r$parameter == "k_pop"], 1.0)
+  expect_equal(r$max[r$parameter == "k_pop"], 1.0)
+})
+
+test_that("get_narrow_ranges also takes a BICc cutoff", {
+  r <- get_narrow_ranges(fake_tabestimates(), bicc_cutoff = 104)
+  expect_equal(r$max[r$parameter == "k_pop"], 3.0)
+  expect_error(get_narrow_ranges(fake_tabestimates()), "one of")
 })
 
 test_that("outlier_detector flags values beyond 1.5 IQR", {

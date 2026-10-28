@@ -230,6 +230,11 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
     }
   }
   if (!is.null(params)) {
+    # Monolix refuses a structural parameter named like an error parameter
+    n_obs <- max(length(obs_cols), length(em), 1)
+    clash <- intersect(params, reserved_error_names(n_obs))
+    if (length(clash)) add("Structural parameter(s) ", paste(clash, collapse = ", "),
+                           " clash with Monolix's error-model parameter names; rename them in the model file")
     re <- unlist(config$model$random_effects_excluded)
     if (length(setdiff(re, params))) add("model.random_effects_excluded has unknown parameter(s): ", paste(setdiff(re, params), collapse = ", "))
     di <- unlist(config$model$distributions)
@@ -251,9 +256,10 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   if (length(ei)) {
     eiv <- unlist(ei)
     if (!is.numeric(eiv) || any(eiv <= 0)) add("model.error_initial values must be positive numbers")
-    if (length(em) == 1) {
-      bad <- setdiff(names(eiv), error_params_for(em[[1]]))
-      if (length(bad)) add("model.error_initial has parameter(s) not in a ", em[[1]], " error model: ", paste(bad, collapse = ", "))
+    if (length(em)) {
+      bad <- setdiff(names(eiv), error_param_names(em))
+      if (length(bad)) add("model.error_initial has parameter(s) not in the error model (",
+                           paste(error_param_names(em), collapse = ", "), "): ", paste(bad, collapse = ", "))
     }
   }
 
@@ -278,7 +284,7 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
 
   # step 1
   s1 <- config$step1_igs
-  error_params <- if (length(em) == 1) error_params_for(em[[1]]) else character()
+  error_params <- if (length(em)) error_param_names(em) else character()
   ir <- s1$initial_ranges
   if (is.null(ir)) {
     add("REQUIRED: step1_igs.initial_ranges")

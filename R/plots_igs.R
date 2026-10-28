@@ -1,6 +1,9 @@
 # Ported from SIV_HIV_rebound_kinetics/scripts/functions.R (Dec 2024).
 # Behaviour unchanged apart from: package template path, file.path() instead of here(),
 # and lixoftConnectors:: prefixes.
+# Changes since porting: parameter order comes from parameter_levels() instead of the loaded
+# Monolix project, so plots can be made from saved results; error parameters found with
+# is_error_param() (a1, b2 ... as well as a, b, c).
 
 #' Plot BICc against each parameter estimate
 #'
@@ -28,7 +31,7 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
   }
   
   ## Generate plot
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   if(any(color == "BICc")){
     tabestimates <- tabestimates %>% mutate(color = bicc)
@@ -116,7 +119,7 @@ plot_distributions <- function(initialvalues, tabestimates, out_folder = "", pro
     params <- unlist(lapply(parameter_set, function(z){ 
       p <- c()
       if(z == "error"){
-        p <- c(p, unique(tabestimates$param)[unique(tabestimates$param) %in% c("a", "b", "c")])
+        p <- c(p, unique(tabestimates$param)[is_error_param(unique(tabestimates$param))])
       }else{
         if(z == "beta") z <- paste0(z, "_")
         p <- c(p, unique(tabestimates$param)[grepl(z, unique(tabestimates$param))])
@@ -131,7 +134,7 @@ plot_distributions <- function(initialvalues, tabestimates, out_folder = "", pro
       filter(param == parameter) 
   }
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   plot <- df %>% 
     pivot_longer(c(initial_value, estimate)) %>% 
@@ -180,7 +183,7 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   df <- merge(initialvalues %>% select(param = parameter, run, initial_value), tabestimates) %>% 
     mutate(param = factor(param, levels = popparams$name)) %>% 
@@ -249,11 +252,13 @@ cor_iv_estimates <- function(tabestimates, initialvalues, out_folder, project_na
   tabestimates <- filtered_results$tabestimates
   caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   df <- merge(initialvalues %>% select(parameter, run, initial_value), tabestimates) %>% 
     mutate(parameter = factor(parameter, levels = popparams$name)) %>% 
     group_by(parameter) %>% 
+    # parameters that start at the same value every run (error, fixed) have no correlation
+    filter(sd(initial_value) > 0, sd(estimate) > 0) %>% 
     summarise(cor = cor.test(initial_value, estimate)$estimate, pval = cor.test(initial_value, estimate)$p.value)
   
   breaks <- round(range(log10(df$pval)))
@@ -289,7 +294,7 @@ correlate_estimates <- function(tabestimates, method = "spearman", out_folder = 
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   correlation_df <- tabestimates %>% 
     select(param, estimate, run)  %>% 
@@ -331,7 +336,7 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   if(pop_only){
     df <- tabestimates %>% 
@@ -377,7 +382,7 @@ calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name =
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   cv <- merge(
     tabestimates, 
@@ -420,7 +425,7 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   # caption <- filtered_results$caption
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   
   if(is.null(parameter)){
@@ -503,7 +508,7 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
   
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
   
-  popparams <- lixoftConnectors::getPopulationParameterInformation()
+  popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   # Get plot y-limit, excluding unusually large rse:
   ylim_range <-  tabestimates %>% 
@@ -798,3 +803,24 @@ color_bicc <- function(...) scale_color_viridis_c("BICc", direction = -1, ...)
 #' @export
 fill_bicc <- function(...) scale_fill_viridis_c("BICc", direction = -1, ...)
 
+
+# Parameters in Monolix's order: population values, random-effect SDs, correlations, covariate
+# effects, error model; first-appearance order within each group.
+parameter_levels <- function(tab) {
+  p <- unique(as.character(if ("param" %in% names(tab)) tab$param else tab$parameter))
+  group <- ifelse(grepl("_pop$", p), 1, ifelse(grepl("^omega", p), 2, ifelse(grepl("^corr_", p), 3,
+                  ifelse(grepl("^beta_", p), 4, 5))))
+  p[order(group, seq_along(p))]
+}
+
+# Parameter names in Monolix's order with a `method` column: "FIXED" for parameters with the
+# same estimate in every run and no standard error, as Monolix reports fixed parameters
+parameter_info <- function(tab) {
+  if (!"param" %in% names(tab)) tab$param <- tab$parameter
+  nm <- parameter_levels(tab)
+  fixed <- vapply(nm, function(p) {
+    x <- tab[tab$param == p, ]
+    length(unique(x$estimate)) == 1 && "rse" %in% names(x) && all(is.na(suppressWarnings(as.numeric(x$rse))))
+  }, logical(1))
+  data.frame(name = nm, method = ifelse(fixed, "FIXED", "MLE"), stringsAsFactors = FALSE)
+}

@@ -122,7 +122,7 @@ test_that("error parameters can't be given sampling ranges, and their starts are
   err <- tryCatch(validate_config(read_analysis_config(path)), error = function(e) conditionMessage(e))
   expect_match(err, "error-model parameter\\(s\\) a aren't sampled")
   expect_match(err, "error_initial values must be positive")
-  expect_match(err, "not in a constant error model: b")
+  expect_match(err, "not in the error model \\(a\\): b")
 })
 
 test_that("the scenario has defaults and the pipeline's required tasks are enforced", {
@@ -143,4 +143,22 @@ test_that("the scenario has defaults and the pipeline's required tasks are enfor
                                               "  standard_errors: true" = "  standard_errors: false")))
   expect_invisible(validate_config(ok))
   expect_true(model_spec(ok, use_fixed = FALSE)$scenario$linearization)
+})
+
+test_that("error parameters are numbered by observation when there are several", {
+  expect_equal(error_param_names(list(vl = "constant")), "a")
+  expect_equal(error_param_names(list(y1 = "combined1", y2 = "constant")), c("a1", "b1", "a2"))
+  expect_equal(error_param_names(c(y1 = "proportional", y2 = "proportional")), c("b1", "b2"))
+})
+
+test_that("a structural parameter named like an error parameter is caught before Monolix", {
+  # Monolix rejects it: "Name 'a' is already used as error parameter in the statistical model"
+  path <- make_config(list("    m: {min: 0.01" = "    a: {min: 0.01, max: 100, log10: true}"))
+  model <- file.path(dirname(path), "2regime_model_delay.txt")
+  m <- readLines(model)
+  m <- sub("input = {lambda,betas,ta,NPs,p,m}", "input = {lambda,betas,ta,NPs,p,a}", m, fixed = TRUE)
+  writeLines(gsub("\\bm\\b", "a", m), model)
+  err <- tryCatch(validate_config(read_analysis_config(path)), error = function(e) conditionMessage(e))
+  expect_match(err, "Structural parameter\\(s\\) a clash with Monolix's error-model parameter names")
+  expect_equal(reserved_error_names(2), c("a1", "a2", "b1", "b2", "c1", "c2"))
 })

@@ -1,6 +1,8 @@
 # Ported from SIV_HIV_rebound_kinetics/scripts/functions.R (Dec 2024).
 # Behaviour unchanged apart from: package template path, file.path() instead of here(),
 # and lixoftConnectors:: prefixes.
+# Changes since porting: get_narrow_ranges() widens only when min_fold_width is given (the SIV
+# code always widened to [best/2, 2*best]) and always keeps the best run.
 
 #' BICc weights and cumulative probability for each run
 #'
@@ -21,40 +23,47 @@ calculate_BICw <- function(tabestimates){
 
 #' Narrower initial-value ranges from an initial guess sampling run
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' Ported from the SIV_HIV_rebound_kinetics functions.R. The range of each
+#' parameter is the min-max of its estimates over the best-supported runs:
+#' runs whose cumulative BICc weight is within `p_threshold` (the best run is
+#' always kept, even when its own weight is above the threshold), or runs with
+#' BICc at or below `bicc_cutoff`.
+#'
+#' @param tabestimates `tabestimates` from [initial_guess_sampling()].
+#' @param p_threshold Cumulative BICc weight (see [calculate_BICw()]).
+#' @param bicc_cutoff Alternative to `p_threshold`: keep runs with BICc at or
+#'   below this value.
+#' @param min_fold_width `NULL` (default) uses the min-max range as is. A number
+#'   `f > 1` widens each range to at least `[best / f, best * f]` around the best
+#'   run's estimate (positive estimates only). The SIV analysis used `f = 2`.
+#' @return Data frame with `parameter`, `min`, `max`, `best`.
 #' @export
-get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NULL){
-  
+get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NULL, min_fold_width = NULL){
+
+  if(is.null(p_threshold) == is.null(bicc_cutoff)) stop("Give one of p_threshold or bicc_cutoff.", call. = FALSE)
+
   if(!is.null(p_threshold)){
-    # First, get range of parameters that give "best" model
     bicw <- calculate_BICw(tabestimates)
-    
-    runs <- bicw %>% 
-      filter(cumprob <= p_threshold) %>% 
-      pull(run)
-    
-    bic_ranges <- tabestimates %>% 
-      filter(run %in% runs) %>% 
-      group_by(parameter) %>% 
-      summarise(min = min(estimate), max = max(estimate), best = estimate[bicc == min(bicc)])
+    runs <- bicw %>% filter(cumprob <= p_threshold | row_number() == 1) %>% pull(run)
+  }else{
+    runs <- tabestimates %>% filter(bicc <= bicc_cutoff) %>% distinct(run) %>% pull(run)
+    if(!length(runs)) stop("No run has BICc at or below ", bicc_cutoff, call. = FALSE)
   }
-  
-  if(!is.null(bicc_cutoff)){
-    bic_ranges <- tabestimates %>% 
-      filter(bicc <= bicc_cutoff) %>% 
-      group_by(parameter) %>% 
-      summarise(min = min(estimate), max = max(estimate), best = estimate[bicc == min(bicc)])
+  best_run <- tabestimates$run[which.min(tabestimates$bicc)]
+
+  search_ranges <- tabestimates %>%
+    filter(run %in% runs) %>%
+    group_by(parameter) %>%
+    summarise(min = min(estimate), max = max(estimate), best = estimate[run == best_run][1], .groups = "drop")
+
+  if(!is.null(min_fold_width)){
+    stopifnot(is.numeric(min_fold_width), min_fold_width > 1)
+    widen <- search_ranges$best > 0
+    search_ranges$min[widen] <- pmin(search_ranges$min[widen], search_ranges$best[widen] / min_fold_width)
+    search_ranges$max[widen] <- pmax(search_ranges$max[widen], search_ranges$best[widen] * min_fold_width)
   }
-  
-  # Now, calculate range as 1/2*best estimate to 2*best estimate, unless it is narrower than the above range
-  search_ranges <- bic_ranges %>% 
-    mutate(
-      min = ifelse(best/2 > min, min, best/2),
-      max = ifelse(best*2 < max, max, best*2)
-    ) 
-  
-  return(search_ranges)
-  
+
+  search_ranges
 }
 
 #' Flag values outside 1.5 IQR

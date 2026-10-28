@@ -189,6 +189,32 @@ guess_report_transforms <- function(parsed) {
   out
 }
 
+#' Names Monolix gives error-model parameters
+#'
+#' With one observation the error parameters are `a`, `b` (and `c`); with
+#' several they're numbered by observation in the order given: `a1`, `b1`,
+#' `a2`, ... (checked on Monolix 2024R1).
+#'
+#' @param error_model Named list or vector, observation column -> error model
+#'   (`model.error_model` in the config).
+#' @return Character vector of parameter names.
+#' @export
+error_param_names <- function(error_model) {
+  em <- unlist(error_model)
+  if (length(em) == 1) return(error_params_for(em[[1]]))
+  unlist(lapply(seq_along(em), function(i) {
+    p <- error_params_for(em[[i]])
+    if (length(p)) paste0(p, i) else character()
+  }))
+}
+
+# Names Monolix reserves for error parameters with n observations; a structural parameter
+# with one of these names makes newProject() fail ("Name 'a' is already used as error
+# parameter"). Checked for `a`; b and c are reserved the same way to be safe.
+reserved_error_names <- function(n_observations) {
+  if (n_observations <= 1) c("a", "b", "c") else paste0(rep(c("a", "b", "c"), each = n_observations), seq_len(n_observations))
+}
+
 # Error-model parameters Monolix creates for one observation
 error_params_for <- function(error_model) {
   switch(error_model,

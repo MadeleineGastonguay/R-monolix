@@ -11,7 +11,11 @@ init_monolix(path = Sys.getenv("MONOLIX_PATH"), check = TRUE)
 \code{MONOLIX_PATH} environment variable so machine-specific paths stay out of
 the analysis config.}
 
-\item{check}{If \code{TRUE}, run \code{\link[=check_installation]{check_installation()}} afterwards.}
+\item{check}{If \code{TRUE}, run \code{\link[=check_installation]{check_installation()}} afterwards and print the
+demo estimates.}
+}
+\value{
+Invisibly, the demo estimates (or \code{TRUE} when \code{check = FALSE}).
 }
 \description{
 Initialize the Monolix connection

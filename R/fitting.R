@@ -5,7 +5,8 @@
 # folder (no globals); seed and predefined-run handling in initial_guess_sampling();
 # results read with the scenario's method (linearization or not); final_model.mlxtran always saved; only missing betas
 # set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method;
-# condition number is NA instead of an error when the correlation matrix has nan.
+# condition number is NA instead of an error when the correlation matrix has nan;
+# each optional record step has its own error handler; sampling moved to draw_initial_values().
 
 #' Fit the loaded project from many sampled initial values
 #'
@@ -55,25 +56,10 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
 
     if(is.null(predefined_initialvalues)){
       
-      # sample new initial estimates
-      popini <- sapply(popparams$name, function(j){
-        if(j %in% names(fixed)){
-          unlist(fixed)[[j]]
-        }else if(is_error_param(j) && j %in% names(set_error)){
-          set_error[[j]] # same start every run; still estimated
-        }else if(j %in% log10){
-          # If sampling over orders of magnitude, sample from log10 space
-          10^(runif(1, log10(initialValue_ranges[j,1]), log10(initialValue_ranges[j,2])))
-        }else{
-          if((grepl("omega", j) | is_error_param(j)) & !is.null(set_variance)){
-            set_variance # If a value is provided for the standard deviations of random effects, do not randomly sample it
-          }else if (grepl("beta_", j) & !is.null(set_treatment)){
-            set_treatment # If a value is provided for the treatment effects, do not randomly sample it
-          }else{
-            runif(1, initialValue_ranges[j,1], initialValue_ranges[j,2])  
-          }
-        }
-      })
+      # sample new initial estimates (see draw_initial_values() in sampling.R)
+      popini <- draw_initial_values(popparams$name, initialValue_ranges, log10 = log10, fixed = fixed,
+                                    set_error = set_error, set_variance = set_variance,
+                                    set_treatment = set_treatment)
       
       # set sampled values as new initial estimates
       newpopparams <- popparams
@@ -121,56 +107,46 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
       iters$run <- i
       tabiters <- rbind(tabiters, iters)
       
-      # Get wald-test p-values for treatment effects;
-      if(record_pvals){
+      # Optional records. Each has its own error handler, so a failure in one (e.g. the
+      # condition number) doesn't lose the others for this run; the run itself is kept.
+      if(record_pvals) record_step("Wald tests", i, {
         p <- lixoftConnectors::getTests()$wald
-        if(!is.null(p)){
-          treatment_pvals <- rbind(
-            treatment_pvals, 
-            p %>% mutate(run = i)
-          )
-        }
-      }
-      
+        if(!is.null(p)) treatment_pvals <- rbind(treatment_pvals, p %>% mutate(run = i))
+      })
+
       # Store Phase Iteration
       phase <- rbind(phase, lixoftConnectors::getSAEMiterations()$iterationNumbers)
-      
-      # Get Individual parameters if specified
-      if(record_indiv_params){
+
+      if(record_indiv_params) record_step("individual parameters", i, {
         indivParams <- rbind(
           indivParams,
-          lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode %>% 
+          lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode %>%
             mutate(run = i)
         )
-        
         predictions <- rbind(
-          predictions, 
-          read_delim(file.path(project_results_dir(), "predictions.txt")) %>% 
+          predictions,
+          read_delim(file.path(project_results_dir(), "predictions.txt"), show_col_types = FALSE) %>%
             mutate(run = i)
         )
-      }
-      
-      # Get shrinkage for individual parameters if specified
-      if(record_shrinkage){
+      })
+
+      if(record_shrinkage) record_step("shrinkage", i, {
         shrinkage_df <- rbind(shrinkage_df, read_shrinkage(i))
-      }
-      
-      # Get condition number if specified:
-      if(record_condition_number){
+      })
+
+      if(record_condition_number) record_step("condition number", i, {
         condition_number <- condition_number_of(lixoftConnectors::getCorrelationOfEstimates()[[methods$se]], run = i)
-        condition_numbers <- rbind(condition_numbers, data.frame(run = i, condition_number = condition_number))  
-      }
-      
-      # Get predictions for variables in table if specified:
-      if(record_table){
+        condition_numbers <- rbind(condition_numbers, data.frame(run = i, condition_number = condition_number))
+      })
+
+      if(record_table) record_step("tables.txt", i, {
         table_predictions <- rbind(
-          table_predictions, 
-          read_delim(file.path(project_results_dir(), "tables.txt")) %>% 
+          table_predictions,
+          read_delim(file.path(project_results_dir(), "tables.txt"), show_col_types = FALSE) %>%
             mutate(run = i)
         )
-      }
-      
-      
+      })
+
     }, error=function(e){cat("ERROR for ", i, ": ",conditionMessage(e), "\n")})
     
     if(is.null(predefined_initialvalues)){
@@ -232,6 +208,15 @@ initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
   lixoftConnectors::runScenario()
   
   return(out)
+}
+
+# Run one optional record step of initial_guess_sampling(); on error print it and carry on.
+# Assignments inside `expr` (with <-) are made in the caller's frame.
+record_step <- function(what, run, expr) {
+  env <- parent.frame()
+  tryCatch(eval(substitute(expr), env),
+           error = function(e) cat("ERROR recording ", what, " for run ", run, ": ", conditionMessage(e), "\n", sep = ""))
+  invisible(NULL)
 }
 
 #' Profile likelihood for one population parameter
