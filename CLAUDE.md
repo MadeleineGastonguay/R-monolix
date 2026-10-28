@@ -24,8 +24,13 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 - `R/`: package code. `fitting.R`, `setup.R`, `selection.R` and `plots_*.R` are ported from the
   SIV `functions.R` (bug fixes noted at the top of each file). `config.R`, `draft_config.R`,
   `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
-  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R` are new.
-- `inst/rmarkdown/templates/monolix_report/`: HTML report template (not generalized yet).
+  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `report.R`,
+  `simulx.R` are new.
+- `inst/rmarkdown/templates/monolix_report/`: HTML report template, rendered by `generate_report()`
+  in an environment whose parent is the package namespace (it uses package helpers directly).
+  Groups, labels and rescaling come from `report.*` and `model.report_transforms` in the config;
+  table helpers are in `R/report.R`. Before rendering, model variables are simulated with Simulx
+  (`R/simulx.R`), which switches lixoftConnectors to Simulx and back to Monolix.
 - `tests/testthat/`: tests run without Monolix by mocking lixoftConnectors calls.
 - `archive/preliminary/`: an older, superseded version of the pipeline, kept for reference.
 - `TODO.md`: open items, including checks that need a working Monolix install.

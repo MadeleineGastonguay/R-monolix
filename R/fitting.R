@@ -3,7 +3,7 @@
 # and lixoftConnectors:: prefixes.
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
 # folder (no globals); seed and predefined-run handling in initial_guess_sampling();
-# results read with the scenario's method (linearization or not); final_model.mlxtran always saved; only missing betas
+# results read with the scenario's method (linearization or not); final_model.mlxtran always saved (before any rerun, so the ModelBuilding results are kept); only missing betas
 # set to 0 in set_base(); fixed Monolix seed; SCM as default model-building method;
 # condition number is NA instead of an error when the correlation matrix has nan;
 # each optional record step has its own error handler; sampling moved to draw_initial_values().
@@ -382,7 +382,11 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
   
   final_projectFile <- file.path(gsub(".mlxtran", "", projectFile), "ModelBuilding", sprintf("ModelBuilding_%03d", best_model), paste0(sprintf("ModelBuilding_%03d", best_model), ".mlxtran") )
   lixoftConnectors::loadProject(final_projectFile)
-  
+  # Save as final_model before any rerun: a run writes results to the loaded project's folder,
+  # which would overwrite the ModelBuilding_00x results with a different scenario.
+  final_model_file <- file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran")
+  lixoftConnectors::saveProject(final_model_file)
+
   if(any(as.character(unlist(lixoftConnectors::getLaunchedTasks())) == "FALSE")){
     # rerun with the analysis scenario (or, without one, every task as in the SIV code)
     if(is.null(scenario)){
@@ -396,14 +400,11 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
 
     lixoftConnectors::runScenario()
     lixoftConnectors::computeChartsData()
+    lixoftConnectors::saveProject(final_model_file)
   }
 
-  # always save, so the report below has a project to read
-  lixoftConnectors::saveProject( file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"))
-  
   # Generate report with results
-  generate_report(project_file = file.path(gsub(".mlxtran", "", projectFile), "final_model.mlxtran"), 
-                  output_file = "SCM_final_model_report.html")
+  generate_report(project_file = final_model_file, output_file = "SCM_final_model_report.html")
   
 }
 

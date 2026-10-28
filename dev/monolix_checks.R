@@ -16,6 +16,12 @@ init_monolix()   # Expect: no error (runs the theophylline demo; estimates aren'
 # Without MONOLIX_PATH, pass the path, e.g.
 # init_monolix("/Applications/MonolixSuite2024R1.app/Contents/Resources/monolixSuite/")
 
+# sink() only captures printed output, so errors, warnings and messages are printed explicitly
+show_conditions <- function(expr) withCallingHandlers(
+  tryCatch(expr, error = function(e) cat("ERROR:", conditionMessage(e), "\n")),
+  warning = function(w) { cat("WARNING:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") },
+  message = function(m) { cat("MESSAGE:", conditionMessage(m)); invokeRestart("muffleMessage") })
+
 # A config for the test model + synthetic data, with short SAEM settings so fits are quick
 work <- file.path(tempdir(), "monolix_checks")
 dir.create(work, showWarnings = FALSE)
@@ -137,8 +143,9 @@ lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))
 lixoftConnectors::runScenario()
 lixoftConnectors::saveProject(file.path(work, "igs_check.mlxtran"))
 generate_report(file.path(work, "igs_check.mlxtran"))
-# Expect: an HTML report in <work>/igs_check/report.html. Sections tied to the SIV study columns
-# may fail; the template isn't generalized yet. Note what fails.
+# Expect: an HTML report in <work>/igs_check/report.html, with no groups (no config given).
+# A section Monolix can't produce for this project shows "Not available for this project: ..."
+# instead of failing; note which.
 
 # 11. Error-parameter names with several observations (optional) ####
 demos <- list.files(lixoftConnectors::getDemoPath(), pattern = "PKPD.*\\.mlxtran$", recursive = TRUE, full.names = TRUE)
@@ -154,13 +161,59 @@ m <- readLines(file.path(work, "2regime_model_delay.txt"))
 m <- sub("input = {lambda,betas,ta,NPs,p,m}", "input = {lambda,betas,ta,NPs,p,a}", m, fixed = TRUE)
 m <- gsub("\\bm\\b", "a", m)
 writeLines(m, file.path(work, "model_param_a.txt"))
-# sink() only captures printed output, so errors, warnings and messages are printed explicitly
-show_conditions <- function(expr) withCallingHandlers(
-  tryCatch(expr, error = function(e) cat("ERROR:", conditionMessage(e), "\n")),
-  warning = function(w) { cat("WARNING:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") },
-  message = function(m) { cat("MESSAGE:", conditionMessage(m)); invokeRestart("muffleMessage") })
 print(show_conditions(lixoftConnectors::newProject(modelFile = file.path(work, "model_param_a.txt"),
                                                    data = list(dataFile = spec$data_file, headerTypes = spec$header_types))))
 print(show_conditions(lixoftConnectors::getPopulationParameterInformation()$name))
 # Record: whether newProject fails, or what the error parameter and a_pop are called
+
+# 13. Generalized report: groups, labels, rescaling, covariate effect ####
+# A fit with one covariate effect (ta ~ vac), reported by tlr7 x vac groups with NPs_pop rescaled.
+lixoftConnectors::loadProject(file.path(work, "igs_check.mlxtran"))
+lixoftConnectors::setCovariateModel(ta = c(vac = TRUE))
+# Save under the new name before running: a run writes results to the loaded project's folder,
+# so running first would put this model's results in igs_check/ ("old inconsistent project").
+lixoftConnectors::saveProject(file.path(work, "report_check.mlxtran"))
+lixoftConnectors::runScenario()
+lixoftConnectors::saveProject(file.path(work, "report_check.mlxtran"))
+names(read_monolix_data(spec$data_file))   # Record: id column name (predictions.txt joins on it)
+rep_path <- show_conditions(generate_report(file.path(work, "report_check.mlxtran"), config = cfg,
+                            stratify_by = c("tlr7", "vac"),
+                            group_labels = list("0.0" = "control", "1.1" = "tlr7 + vac"),
+                            report_transforms = list(NPs_pop = list(label = "NP_pop", expr = "x * 10^5"))))
+rep_path
+# Expect: report in <work>/report_check/report.html. Open it and check:
+# - "Report groups: tlr7, vac"; prediction plots with 4 groups (control, tlr7=1, vac=0, ...)
+# - Population parameters: NP_pop = NPs_pop x 10^5, with its limits
+# - Treatment Effects: beta_ta_vac_1 with a fold change
+# - Standard deviations of random effects: one row per omega, CV column filled (if empty,
+#   note what getEstimatedPopulationParameters(coefficientsOfVariation = TRUE) calls the CVs)
+# - Prediction plots drawn as smooth curves (fine grid), not only at observation times, and no
+#   "No individual fits chart data" note
+# - Stratified VPC and prediction distribution split by tlr7 and vac
+list.files(file.path(work, "report_check", "ChartsData", "IndividualFits"))
+head(read.csv(list.files(file.path(work, "report_check", "ChartsData", "IndividualFits"),
+                         pattern = "_fits\\.txt$", full.names = TRUE)[1]))
+# Record: file names and columns (read_indfits() expects <obs>_fits.txt with ID, time, popPred
+# and indivPredMode/indivPredMean; if the names differ, note them)
+# - "Model variables for each individual": subtitle "Simulated with Simulx ..." and smooth curves
+#   (if it says tables.txt, a "Simulx simulation ... failed" WARNING above gives the reason)
+
+# 14. Simulx simulation of the model variables ####
+# generate_report() runs this; here it's run on its own to see each step's output.
+sim_file <- show_conditions(simulate_model_variables(file.path(work, "report_check.mlxtran"), n_points = 50))
+sim_file   # Expect: <work>/report_check/ModelVariables/simulated_model_variables.txt
+sims <- read_simulated_variables(file.path(work, "report_check"))
+str(sims)
+table(sims$variable)   # Expect: T, V, E, I, P with 50 x (number of individuals) rows each
+setequal(unique(sims$id), unique(read_monolix_data(spec$data_file)$id))
+# Expect: TRUE (ids are the data's ids; if FALSE, note what getSimulationResults() calls them)
+show_conditions(lixoftConnectors::getLixoftConnectorsState())
+# Expect: software monolix (switched back after the simulation)
+# If the simulation fails, record the error. Then, to see what Simulx made of the project:
+# lixoftConnectors::initializeLixoftConnectors("simulx", force = TRUE)
+# lixoftConnectors::importProject(file.path(work, "report_check.mlxtran"))
+# str(lixoftConnectors::getGroups()); names(lixoftConnectors::getIndividualElements())
+# lixoftConnectors::initializeLixoftConnectors("monolix", force = TRUE)
+# Record: any "Not available for this project" notes and their messages.
+
 # sink()   # if logging

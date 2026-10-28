@@ -4,7 +4,8 @@
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
 # folder (no globals); attempt cap and seed in initial_guess_sampling(); only missing betas
 # set to 0 in set_base(); fixed Monolix seed; BICc as default model-building criterion;
-# create_project() stops when newProject() fails.
+# create_project() stops when newProject() fails; generate_report() takes groups, labels and
+# rescaling from the config (template generalized).
 
 #' Set scenario tasks and SAEM settings for the loaded project
 #'
@@ -147,14 +148,58 @@ set_base <- function(initial_values, omega_under_1 = F, fixed = NULL){
 
 #' Render the HTML report for a Monolix project
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' Ported from the SIV_HIV_rebound_kinetics functions.R and generalized: the
+#' groups, labels and rescaling come from the config instead of the SIV study
+#' columns. Needs Monolix ([init_monolix()]) and a project that has been run.
+#'
+#' @param project_file Path to the .mlxtran project.
+#' @param output_file File name of the report, written to the project's
+#'   results folder.
+#' @param config Optional analysis config ([read_analysis_config()]); supplies
+#'   the defaults for the arguments below.
+#' @param stratify_by Covariate columns that define the report groups
+#'   (`report.stratify_by`). `NULL`: no groups.
+#' @param group_labels Group key -> label (`report.group_labels`), see
+#'   [report_groups()].
+#' @param report_transforms Rescaling of population estimates
+#'   (`model.report_transforms`), see [transform_estimates()].
+#' @param title Report title.
+#' @param simulate_variables If `TRUE`, simulate the model variables on a
+#'   fine grid with Simulx first ([simulate_model_variables()]). If that
+#'   fails, the report plots them at the observation times (tables.txt).
+#' @param variables Passed to [simulate_model_variables()].
+#' @return Path to the report, invisibly.
 #' @export
-generate_report <- function(project_file, output_file = "report.html"){
+generate_report <- function(project_file, output_file = "report.html", config = NULL,
+                            stratify_by = config$report$stratify_by,
+                            group_labels = config$report$group_labels,
+                            report_transforms = config$model$report_transforms,
+                            title = "Monolix report", simulate_variables = TRUE, variables = NULL){
+  require_monolix()
+  project_file <- normalizePath(project_file, mustWork = TRUE)
+  # Fine-grained model-variable curves; stale curves are removed so a failed simulation
+  # doesn't leave curves from an earlier fit
+  sim_file <- simulated_variables_file(str_remove(project_file, "\\.mlxtran$"))
+  if (file.exists(sim_file)) file.remove(sim_file)
+  if (simulate_variables) {
+    tryCatch(simulate_model_variables(project_file, variables),
+             error = function(e) warning("Simulx simulation of the model variables failed (the report ",
+                                         "uses tables.txt instead): ", conditionMessage(e), call. = FALSE))
+  }
   output_file <- file.path(str_remove(project_file, "\\.mlxtran$"), output_file)
-  rmarkdown::render(
-    system.file("rmarkdown", "templates", "monolix_report", "skeleton", "skeleton.Rmd", package = "monolixPipelineR"),
-    params = list(project = project_file),
-    output_file = output_file
+  template <- system.file("rmarkdown", "templates", "monolix_report", "skeleton", "skeleton.Rmd",
+                          package = "monolixPipelineR")
+  out <- rmarkdown::render(
+    template,
+    params = list(project = project_file, title = title, stratify_by = unlist(stratify_by),
+                  group_labels = group_labels, report_transforms = report_transforms),
+    output_file = output_file,
+    # knit in a temporary folder, so intermediate files don't land in the package
+    intermediates_dir = tempdir(),
+    # the template uses package helpers and imports (dplyr, ggplot2, ...)
+    envir = new.env(parent = asNamespace("monolixPipelineR")),
+    quiet = TRUE
   )
+  invisible(out)
 }
 

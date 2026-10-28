@@ -166,3 +166,36 @@ don't clash with error-parameter names is in TODO.md.
 
 The `create_project()` stop is tested with mocks only. Section 12 calls `newProject()`
 directly, so it hasn't been run through Monolix yet.
+
+# Round 3: report (sections 1, 10, 13, 14; log `dev/monolix_check_output4.log`, 2026-10-28)
+
+## 1. Unit tests
+282 pass, 0 fail, after updating GGally to 2.4.0 (the `test-plots.R` failure came from
+GGally 2.2.1 with ggplot2 4.0.3).
+
+## 10 and 13. Reports
+Both rendered. Checked in the HTML:
+- CV column filled for every omega (names `omega_<param>_CV` as expected).
+- `NP_pop` rescaled by the config (1.5e+05); `beta_ta_vac_1` in the treatment-effects table.
+- report_check: groups from `tlr7` x `vac` with labels; stratified VPC and prediction
+  distribution drawn. igs_check (no config): one group, "No stratification" note.
+- Condition-number notes name the non-finite parameters (`m_pop`; in report_check also
+  `beta_ta_vac_1`, `omega_p`): expected with 3 short SAEM runs on synthetic data.
+- **Bug found:** "Correlation of random effects" showed "Not available: arguments imply
+  differing number of rows: 0, 1". The pairs plot kept only columns named after the parameters,
+  but the random-effects table calls them `eta_<param>`. Fixed (`prefix = "eta_"`).
+
+Fine-grained fits: `ChartsData/IndividualFits/vl_fits.txt` (and `vl_observations.txt`), 256
+times per individual, columns `ID, time, pop, popPred, indivPredMean, indivPredMode`. `pop` uses
+the median covariates (equals `popPred_medianCOV` in predictions.txt); `popPred` uses each
+individual's covariates. **Bug found:** `read_indfits()` picked `pop`, so the population plot
+ignored covariate effects. Fixed to use `popPred`.
+
+## 14. Simulx model variables
+Works. 5 variables x 12 individuals x 50 times; ids are the data's ids; lixoftConnectors is back
+in Monolix mode afterwards. At each individual's first and last observation time the simulated
+values match `<variable>_mode` in tables.txt to within 0.09% (ODE solver), so the EBEs are
+paired with the right individuals. Simulx warns at import: "For mlx_EBEs and mlx_Cov, shared
+IDs should be ticked ..." and "mlx_PopUncertainSA has not been created because there are NaNs
+in the RSE". Neither matters here: the simulation uses the EBEs, which already include
+covariate effects, not the covariate or uncertainty elements.

@@ -33,6 +33,15 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
 - Whether Monolix also rejects structural parameters named `b` or `c` with a constant error
   model. `validate_config()` rejects a, b and c to be safe.
 
+## Report (rendered with Monolix 2024R1 on the synthetic data; see dev/monolix_check_results.md)
+- Simulx simulation of the model variables: not checked for models with doses or regressors
+  (the synthetic model has neither); the imported simulation group's treatments/regressors
+  are left as Simulx sets them.
+- Several observation types: the prediction plots need one observation column in
+  predictions.txt and are skipped otherwise. Check what Monolix writes with two observations.
+- Report sections from the pipeline's own results (IGS ranges, SCM table, model comparison)
+  aren't in the template yet; it reports one Monolix project.
+
 ## Decide later
 - `get_narrow_ranges()` now always keeps the best run. The SIV rule (cumulative weight
   <= 0.95) returned no runs when the best run alone carried more than 95% of the weight.

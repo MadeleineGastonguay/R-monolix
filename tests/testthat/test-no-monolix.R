@@ -4,7 +4,7 @@
 # lixoftConnectors calls.
 NO_MONOLIX_FILES <- c("plots_igs.R", "plots_ranges.R", "plots_model_building.R", "plots_fits.R",
                       "plots_model_comparison.R", "diagnostics.R", "summaries.R", "model_building.R",
-                      "selection.R", "sampling.R", "schema.R")
+                      "selection.R", "sampling.R", "schema.R", "report.R")
 
 # Names of the functions defined at the top level of an R file
 functions_in <- function(path) {
