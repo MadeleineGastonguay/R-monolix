@@ -1,4 +1,5 @@
-# Reading the results of a Monolix covariate search (getModelBuildingResults()).
+# Reading the results of a Monolix covariate search (getModelBuildingResults()), SCM or
+# COSSAC, and turning them into the candidate models compared in step 4.
 # Each entry is one tested model with `BICc`, `LL`, `tested` (the parameter-covariate pair
 # added at that step; c("", "") for the base model), `individualModels` (logical table,
 # rows = parameters, columns = covariates: the full covariate model) and `bestModel`.
@@ -97,4 +98,67 @@ scm_truncated_model <- function(mb, delta_bicc = 2) {
 format_covariate_model <- function(cm) {
   if (!length(cm)) return("(none)")
   paste(names(cm), vapply(cm, paste, character(1), collapse = ", "), sep = ": ", collapse = "; ")
+}
+
+#' Candidate covariate models for step 4
+#'
+#' Combines the automatic candidates of each covariate search that ran
+#' (`scm_best` and `scm_delta2` from SCM, `cossac_best` from COSSAC) with the
+#' hand-written `step3_model_building.candidate_models`, keeping only those in
+#' `step4_model_comparison.compare` (all when `~`).
+#'
+#' Candidates with the same covariate model (e.g. SCM and COSSAC choosing the
+#' same covariates) would be fitted twice from the same initial values and tie
+#' in every run, so only the first name is kept; the others are listed in the
+#' `duplicates` attribute and in a message.
+#'
+#' @param config Output of [read_analysis_config()].
+#' @param searches Named list of `getModelBuildingResults()` outputs, one per
+#'   method that ran (`list(SCM = ..., COSSAC = ...)`); empty when the method
+#'   is `none`.
+#' @return Named list of covariate models (`parameter = covariates`), with
+#'   attribute `duplicates` (data frame `dropped`, `same_as`).
+#' @export
+resolve_candidates <- function(config, searches = list()) {
+  methods <- model_building_methods(config)
+  names(searches) <- toupper(names(searches))
+  missing <- setdiff(methods, names(searches))
+  if (length(missing)) stop("No ", paste(missing, collapse = ", "), " results given; the config runs ",
+                            paste(methods, collapse = " and "), call. = FALSE)
+  delta <- config$step3_model_building$scm_stop_rule_delta_bicc %||% 2
+
+  strip <- function(m) { attributes(m) <- list(names = names(m)); m }
+  auto <- list()
+  if ("SCM" %in% methods) {
+    auto$scm_best <- strip(scm_best_model(searches$SCM))
+    auto$scm_delta2 <- strip(scm_truncated_model(searches$SCM, delta_bicc = delta))
+  }
+  if ("COSSAC" %in% methods) auto$cossac_best <- strip(scm_best_model(searches$COSSAC))
+  hand <- lapply(config$step3_model_building$candidate_models %||% list(), function(m) lapply(m, unlist))
+  all <- c(auto, hand)
+
+  cmp <- unlist(config$step4_model_comparison$compare)
+  if (length(cmp)) {
+    unknown <- setdiff(cmp, names(all))
+    if (length(unknown)) stop("step4_model_comparison.compare has unknown model(s): ", paste(unknown, collapse = ", "), call. = FALSE)
+    all <- all[cmp]
+  }
+
+  # one key per covariate model, independent of order
+  key <- vapply(all, function(m) {
+    m <- m[lengths(m) > 0]
+    if (!length(m)) return("(none)")
+    m <- lapply(m[order(names(m))], sort)
+    format_covariate_model(m)
+  }, character(1))
+  first <- match(key, key)
+  dup <- which(first != seq_along(key))
+  duplicates <- data.frame(dropped = names(all)[dup], same_as = names(all)[first[dup]], stringsAsFactors = FALSE)
+  if (length(dup)) {
+    message("Same covariate model, fitted once: ",
+            paste0(duplicates$dropped, " = ", duplicates$same_as, collapse = "; "))
+    all <- all[-dup]
+  }
+  if (length(all) < 2) warning("Only ", length(all), " distinct candidate model(s) to compare", call. = FALSE)
+  structure(all, duplicates = duplicates)
 }

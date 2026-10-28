@@ -45,3 +45,13 @@ Results are in `dev/monolix_check_results.md`; all checks 0–12 are done. Still
 ## Decide later
 - `get_narrow_ranges()` now always keeps the best run. The SIV rule (cumulative weight
   <= 0.95) returned no runs when the best run alone carried more than 95% of the weight.
+
+## Covariate search options (method: none, SCM, COSSAC or both)
+- Check on Monolix: `covariate_model_building(method = "COSSAC")` runs, and
+  `getModelBuildingResults()` from COSSAC has the same shape as SCM's (one entry with
+  `bestModel = TRUE`), which `resolve_candidates()` assumes. `strategy` is now passed in lower
+  case ("scm", "cossac") as `?getModelBuildingSettings` lists it; "SCM" also worked in check 9.
+- `covariate_model_building()` sets `useSambaBeforeCossac`, which isn't among the setting names
+  Monolix 2024R1 returned (check 8). Check it's ignored, or remove it.
+- The driver (step 7) must give SCM and COSSAC their own project files so their ModelBuilding
+  folders and final_model.mlxtran don't collide.

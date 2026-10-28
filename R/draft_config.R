@@ -111,7 +111,7 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("")
   s3 <- d$step3_model_building
   ln("step3_model_building:")
-  ln("  method: ", yv(s3$method), cm("or COSSAC"))
+  ln("  method: ", yv(s3$method), cm("SCM, COSSAC, [SCM, COSSAC] to run and compare both, or none to compare only candidate_models"))
   ln("  criterion: ", yv(s3$criterion), cm("Monolix's name for BICc; or LRT"))
   ln("  lrt_thresholds: ", flow(s3$lrt_thresholds), cm("only used with LRT"))
   if (length(covs)) {
@@ -125,7 +125,7 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("  initial_value_rounding: ", yv(s3$initial_value_rounding), cm("significant figures for _pop initial values"))
   ln("  omega_initial: ", yv(s3$omega_initial))
   ln("  scm_stop_rule_delta_bicc: ", yv(s3$scm_stop_rule_delta_bicc), cm("for the automatic scm_delta2 candidate"))
-  ln("  candidate_models: ~", cm("CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 are added automatically"))
+  ln("  candidate_models: ~", cm("CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 (SCM) and cossac_best (COSSAC) are added automatically"))
   ln("")
   s4 <- d$step4_model_comparison
   ln("step4_model_comparison:")

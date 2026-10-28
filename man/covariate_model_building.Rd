@@ -22,5 +22,8 @@ best model's tasks have to be rerun. \code{NULL} runs every task without
 linearization, as the SIV code did.}
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Ported from the SIV_HIV_rebound_kinetics functions.R. Results go to
+\verb{<project>/ModelBuilding} and \verb{<project>/final_model.mlxtran}, so to run
+both SCM and COSSAC, give each its own \code{projectFile} (e.g. \code{scm.mlxtran}
+and \code{cossac.mlxtran}).
 }

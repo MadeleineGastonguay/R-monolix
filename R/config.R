@@ -55,8 +55,48 @@ TEXT_KEYS <- c("name", "out_folder", "file", "structural_model", "version", "hea
                "parameters", "fdr_method", "final_model", "fixed_rationale", "final_rationale", "label",
                "expr", "stratify_by", "group_labels", "compare", "candidate_models", "relationships")
 
-# Names of the automatic candidate models built from the SCM results
-AUTO_CANDIDATES <- c("scm_best", "scm_delta2")
+# Covariate search methods for step3_model_building.method, and the candidate models each one
+# adds automatically. COSSAC has no stop-rule variant: its path isn't one covariate per step.
+MODEL_BUILDING_METHODS <- c("SCM", "COSSAC")
+METHOD_CANDIDATES <- list(SCM = c("scm_best", "scm_delta2"), COSSAC = "cossac_best")
+# Every name reserved for an automatic candidate
+AUTO_CANDIDATES <- unlist(METHOD_CANDIDATES, use.names = FALSE)
+
+#' Covariate search methods to run in step 3
+#'
+#' `step3_model_building.method` is `SCM`, `COSSAC`, a list of both (each search
+#' runs and their results are compared in step 4), or `none` (no search: only
+#' the hand-written `candidate_models` are compared). Case doesn't matter.
+#'
+#' @param config Output of [read_analysis_config()].
+#' @return Character vector of methods in upper case (`character()` for none).
+#'   Errors on anything else.
+#' @export
+model_building_methods <- function(config) {
+  m <- toupper(unlist(config$step3_model_building$method))
+  if (!length(m)) stop("step3_model_building.method is not set", call. = FALSE)
+  if (identical(m, "NONE")) return(character())
+  bad <- setdiff(m, MODEL_BUILDING_METHODS)
+  if (length(bad) || anyDuplicated(m)) {
+    stop("step3_model_building.method must be SCM, COSSAC, [SCM, COSSAC] or none; got ",
+         paste(unlist(config$step3_model_building$method), collapse = ", "), call. = FALSE)
+  }
+  m
+}
+
+#' Names of the candidate models for step 4
+#'
+#' The automatic candidates of each covariate search method (`scm_best`,
+#' `scm_delta2` for SCM; `cossac_best` for COSSAC), then the hand-written
+#' `candidate_models`.
+#'
+#' @inheritParams model_building_methods
+#' @return Character vector.
+#' @export
+candidate_names <- function(config) {
+  c(unlist(METHOD_CANDIDATES[model_building_methods(config)], use.names = FALSE),
+    names(config$step3_model_building$candidate_models))
+}
 
 # Keep y/n/yes/no/on/off as text; only true/false are logicals
 yaml_handlers <- function() {
@@ -342,26 +382,41 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   # step 3: model building and candidates (checkpoint 2)
   if (up_to_step >= 3) {
     s3 <- config$step3_model_building
-    if (!isTRUE(s3$method %in% c("SCM", "COSSAC"))) add("step3_model_building.method must be SCM or COSSAC")
-    if (!isTRUE(s3$criterion %in% c("BIC", "LRT"))) add("step3_model_building.criterion must be BIC (Monolix's name for BICc) or LRT")
-    covs <- unlist(s3$covariates)
-    if (!identical(covs, "all") && length(cov_cols) && length(setdiff(covs, cov_cols))) {
-      add("step3_model_building.covariates has non-covariate column(s): ", paste(setdiff(covs, cov_cols), collapse = ", "))
-    }
-    prm <- unlist(s3$parameters)
-    if (!identical(prm, "all") && !is.null(params) && length(setdiff(prm, params))) {
-      add("step3_model_building.parameters has unknown parameter(s): ", paste(setdiff(prm, params), collapse = ", "))
+    methods <- tryCatch(model_building_methods(config), error = function(e) { add(conditionMessage(e)); NULL })
+    searching <- length(methods) > 0
+    if (searching) {
+      # search settings matter only when a covariate search runs
+      if (!isTRUE(s3$criterion %in% c("BIC", "LRT"))) add("step3_model_building.criterion must be BIC (Monolix's name for BICc) or LRT")
+      covs <- unlist(s3$covariates)
+      if (!identical(covs, "all") && length(cov_cols) && length(setdiff(covs, cov_cols))) {
+        add("step3_model_building.covariates has non-covariate column(s): ", paste(setdiff(covs, cov_cols), collapse = ", "))
+      }
+      prm <- unlist(s3$parameters)
+      if (!identical(prm, "all") && !is.null(params) && length(setdiff(prm, params))) {
+        add("step3_model_building.parameters has unknown parameter(s): ", paste(setdiff(prm, params), collapse = ", "))
+      }
+      if ("SCM" %in% methods && (!is_number(s3$scm_stop_rule_delta_bicc) || s3$scm_stop_rule_delta_bicc <= 0)) {
+        add("step3_model_building.scm_stop_rule_delta_bicc must be positive")
+      }
     }
     if (!is_count(s3$initial_value_rounding)) add("step3_model_building.initial_value_rounding must be a positive whole number")
-    if (!is_number(s3$scm_stop_rule_delta_bicc) || s3$scm_stop_rule_delta_bicc <= 0) add("step3_model_building.scm_stop_rule_delta_bicc must be positive")
     cm <- s3$candidate_models
+    auto <- unlist(METHOD_CANDIDATES[methods], use.names = FALSE)
     if (is.null(cm)) {
       if (up_to_step > 3 || decisions_needed) {
-        todo <- c(todo, "step3_model_building.candidate_models (checkpoint 2): named treatment-effect models, or {} to compare only scm_best and scm_delta2")
+        todo <- c(todo, if (searching) {
+          paste0("step3_model_building.candidate_models (checkpoint 2): named treatment-effect models, or {} to compare only ",
+                 paste(auto, collapse = " and "))
+        } else {
+          "step3_model_building.candidate_models: at least two named treatment-effect models to compare (method is none)"
+        })
       }
     } else {
+      if (!is.null(methods) && !searching && length(cm) < 2) {
+        add("step3_model_building.candidate_models needs at least two models when method is none (no covariate search adds any)")
+      }
       clash <- intersect(names(cm), AUTO_CANDIDATES)
-      if (length(clash)) add("step3_model_building.candidate_models: ", paste(clash, collapse = ", "), " are added automatically; pick other names")
+      if (length(clash)) add("step3_model_building.candidate_models: ", paste(clash, collapse = ", "), " are reserved for the automatic candidates of the covariate searches; pick other names")
       for (nm in names(cm)) {
         te <- cm[[nm]]
         if (!is.null(params) && length(setdiff(names(te), params))) add("candidate '", nm, "' has unknown parameter(s): ", paste(setdiff(names(te), params), collapse = ", "))
@@ -375,9 +430,11 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   if (up_to_step >= 4) {
     s4 <- config$step4_model_comparison
     if (!is_count(s4$nits)) add("step4_model_comparison.nits must be a positive whole number")
-    candidates <- c(AUTO_CANDIDATES, names(config$step3_model_building$candidate_models))
+    candidates <- tryCatch(candidate_names(config), error = function(e) character())
     cmp <- unlist(s4$compare)
-    if (length(setdiff(cmp, candidates))) add("step4_model_comparison.compare has unknown model(s): ", paste(setdiff(cmp, candidates), collapse = ", "))
+    if (length(setdiff(cmp, candidates))) add("step4_model_comparison.compare has unknown model(s): ", paste(setdiff(cmp, candidates), collapse = ", "),
+                                              " (candidates: ", paste(candidates, collapse = ", "), ")")
+    if (length(cmp) == 1) add("step4_model_comparison.compare needs at least two models, or ~ for all candidates")
     if (!isTRUE(s4$fdr_method %in% stats::p.adjust.methods)) add("step4_model_comparison.fdr_method must be one of ", paste(stats::p.adjust.methods, collapse = ", "))
     if (is.null(s4$final_model)) {
       if (decisions_needed) todo <- c(todo, "step4_model_comparison.final_model (checkpoint 3): the candidate to keep as the final model")

@@ -330,7 +330,10 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 
 #' Run Monolix covariate model building (SCM or COSSAC)
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
+#' Ported from the SIV_HIV_rebound_kinetics functions.R. Results go to
+#' `<project>/ModelBuilding` and `<project>/final_model.mlxtran`, so to run
+#' both SCM and COSSAC, give each its own `projectFile` (e.g. `scm.mlxtran`
+#' and `cossac.mlxtran`).
 #'
 #' @param scenario Optional `scenario` section of the config, used when the
 #'   best model's tasks have to be rerun. `NULL` runs every task without
@@ -350,7 +353,7 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
   set <- lixoftConnectors::getModelBuildingSettings()
   
   # modify the settings
-  set$strategy <- method # "cossac" or "scm"
+  set$strategy <- tolower(method) # Monolix's names: "scm" or "cossac"
   set$useSambaBeforeCossac <- FALSE # if true, corresponds to "covSAMBA-COSSAC" in the GUI
   set$criterion <- criteria # "BIC" (Monolix uses this for BICc) or "LRT"
   set$useLin <- linearization
@@ -404,7 +407,7 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
   }
 
   # Generate report with results
-  generate_report(project_file = final_model_file, output_file = "SCM_final_model_report.html")
+  generate_report(project_file = final_model_file, output_file = paste0(toupper(method), "_final_model_report.html"))
   
 }
 

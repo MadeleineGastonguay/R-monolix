@@ -47,7 +47,7 @@ test_that("a full config validates through step 4 and catches bad candidates", {
   repl[["  candidate_models: ~"]] <- "  candidate_models: {scm_best: {ta: [vac]}, am3: {ta: [weight]}, am4: {q: [vac]}}"
   repl[["  final_model: ~"]] <- "  final_model: am9"
   err <- tryCatch(validate_config(read_analysis_config(make_config(repl)), 4), error = function(e) conditionMessage(e))
-  expect_match(err, "scm_best are added automatically")
+  expect_match(err, "scm_best are reserved for the automatic candidates")
   expect_match(err, "am3' uses non-covariate column\\(s\\): weight")
   expect_match(err, "am4' has unknown parameter\\(s\\): q")
   expect_match(err, "final_model 'am9'")

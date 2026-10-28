@@ -45,6 +45,9 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
   `aic`, `bic`, `bicc`, `initial_value`, `model`, `profiled_parameter`, `profiled_value`.
   Tables passed to Monolix keep Monolix's names (`name`, `initialValue`).
 - Monolix's model-building criterion value `"BIC"` means BICc.
+- `step3_model_building.method` is SCM, COSSAC, [SCM, COSSAC] or none. Each search adds
+  automatic candidates (`scm_best`, `scm_delta2`; `cossac_best`); `resolve_candidates()` merges
+  them with `candidate_models` and fits identical covariate models only once.
 - Error-model parameters are estimated but not sampled; they start at Monolix's defaults
   (a = 1, b = 0.3, c = 1) unless `model.error_initial` overrides them.
 - The Monolix seed is fixed in code (`MONOLIX_SEED`); only the R sampling seed is configurable.

@@ -20,5 +20,6 @@ attribute \code{indiv_column} (the Monolix column used for \code{indivPred}), or
 Reads \verb{ChartsData/IndividualFits/<obs>_fits.txt} from a results folder, the
 curves Monolix draws in its individual fits plot (on the \code{grid} project
 setting's time points, not only the observation times). The file is written
-by \code{lixoftConnectors::computeChartsData(plot = "indfits")}.
+by \code{lixoftConnectors::computeChartsData(plot = "indfits")}, with columns
+\code{ID}, \code{time}, \code{pop}, \code{popPred}, \code{indivPredMean} and \code{indivPredMode} (Monolix 2024R1).
 }
