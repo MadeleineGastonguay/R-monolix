@@ -183,7 +183,7 @@ report:
 
 ## Results
 
-Everything goes under `analysis.out_folder`:
+Everything goes under `analysis.out_folder`. Each step’s HTML page is the place to start; the CSV and PDF files next to it hold the same tables and figures.
 
 ```         
 results/example/
@@ -201,7 +201,7 @@ results/example/
   history.yaml            one entry per finished step
 ```
 
-`pipeline_paths(config)` gives these folders in R.
+`pipeline_paths(config)` gives these folders in R. 
 
 ## Rerunning steps
 
