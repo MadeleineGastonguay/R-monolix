@@ -13,13 +13,13 @@ run_step1(config, rerun = FALSE)
 }
 \value{
 List with \code{wide}, \code{narrow} (IGS results), \code{narrow_ranges},
-\code{identifiability} and \code{profiles}.
+\code{identifiability} and \code{sampling_ranges}.
 }
 \description{
 Base model (no covariates, nothing fixed). A wide IGS over
 \code{step1_igs.initial_ranges} (omegas over \code{omega_range}), narrow ranges from
 its best-supported runs, then a narrow IGS with omegas starting at
 \code{narrow.omega_initial}. Writes diagnostics for both, the identifiability
-summary and parameter-range plot, and the optional profile likelihoods.
-Checkpoint 1 (\code{decisions.fixed}) follows.
+summary and parameter-range plot. The optional profile likelihoods run
+next, in \code{\link[=run_profiles]{run_profiles()}}; checkpoint 1 (\code{decisions.fixed}) follows.
 }

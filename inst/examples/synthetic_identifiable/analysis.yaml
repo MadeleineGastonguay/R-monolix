@@ -1,0 +1,98 @@
+# Example analysis.yaml on data simulated from the model itself (make_data.R in this folder;
+# true values in true_parameters.csv). 40 animals, 10 per tlr7 x vac arm; the truth has one
+# covariate effect, vac on ta (2-fold). With viral load alone, lambda_pop and p_pop aren't
+# estimable (no standard error), so step 2 fixes parameters: the full workflow is exercised.
+# Run counts and SAEM iterations are small so the example runs in minutes; a real analysis
+# would use the defaults (100 runs per IGS, SAEM 50/1000/500).
+#
+# To run it: copy this folder somewhere and run run_pipeline("analysis.yaml") (or source
+# inst/scripts/run_pipeline.R next to it). It stops at each checkpoint; decisions are left as ~.
+# `~` means not set or not decided yet; `{}` means none.
+
+analysis:
+  name: synthetic_identifiable
+  out_folder: results/synthetic_identifiable  # relative to this file
+  r_seed: 1  # seed for sampling initial values (the Monolix seed is fixed)
+
+monolix:
+  version: ~  # optional, e.g. "2024R1"; the install path comes from MONOLIX_PATH
+
+data:
+  file: synthetic_vl_data.txt
+  header_types:
+    id: id
+    time: time
+    vl: observation
+    censor: cens
+    tlr7: catcov
+    vac: catcov
+
+model:
+  structural_model: 2regime_model_delay.txt
+  error_model:
+    vl: constant
+  error_initial: {}  # default Monolix's: a = 1
+  random_effects_excluded: []
+  distributions: {}  # default lognormal
+  report_transforms:
+    NPs_pop: {label: NP_pop, expr: x * 10^5}  # from `NP = NPs * 10^5` in the model
+    betas_pop: {label: beta_pop, expr: x * 10^(-7)}  # from `beta = betas * 10^(-7)` in the model
+
+estimation:
+  saem: {burn_in: 20, exploratory: 300, smoothing: 100, smoothing_alpha: 0.7, exploratory_autostop: true, smoothing_autostop: true}
+
+scenario:
+  population_parameters: true
+  conditional_mode: true
+  conditional_distribution: true
+  standard_errors: true
+  log_likelihood: true
+  linearization: false
+  plots: false
+
+step1_igs:
+  initial_ranges:  # about 100-fold around plausible values (true: 100, 7, 4, 10, 3, 100)
+    lambda: {min: 10, max: 1000, log10: true}
+    betas: {min: 0.1, max: 100, log10: true}
+    ta: {min: 0.1, max: 40, log10: true}
+    NPs: {min: 0.1, max: 100, log10: true}
+    p: {min: 0.1, max: 30, log10: true}
+    m: {min: 1, max: 1000, log10: true}
+  omega_range: [1, 5]
+  wide_nits: 20
+  narrow: {nits: 20, p_threshold: 0.95, min_fold_width: ~, omega_initial: 1}
+  profile_likelihood: {}  # run after step 1, e.g. {lambda_pop: {range: [20, 1000], n: 15, log10: true}}
+  plots: {remove_bicc_outliers: false, remove_estimate_outliers: false}
+
+decisions:
+  fixed: ~  # CHECKPOINT 1: expected to fix lambda_pop and/or p_pop (true values 100 and 3)
+  fixed_rationale: ~
+  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing; set back to ~ when you change fixed
+
+step2_igs: {nits: 20}
+
+step3_model_building:
+  method: SCM
+  criterion: BIC
+  lrt_thresholds: {forward: 0.05, backward: 0.01}
+  covariates: [tlr7, vac]
+  parameters: all
+  relationships: ~  # or {include: {ta: [vac]}, exclude: {m: [tlr7]}}: pairs in every model / in none
+  use_linearization: false
+  initial_value_rounding: 1
+  omega_initial: 1
+  scm_stop_rule_delta_bicc: 2
+  candidate_models: ~  # CHECKPOINT 2: e.g. {ta_vac_NPs_tlr7: {ta: [vac], NPs: [tlr7]}}, or {}
+
+step4_model_comparison:
+  nits: 10
+  compare: ~  # CHECKPOINT 2b (after step 3's single fits): all, or a list of candidates to compare
+  omega_initial: 1
+  treatment_initial: 0
+  fdr_method: fdr
+  final_model: ~  # CHECKPOINT 3
+  final_rationale: ~
+
+report:
+  stratify_by: [tlr7, vac]
+  group_labels: {"0.0": control, "1.1": "tlr7 + vac"}

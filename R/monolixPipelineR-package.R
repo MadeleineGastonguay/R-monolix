@@ -21,6 +21,6 @@ utils::globalVariables(c(
   "lower", "n_covar", "BICc", "threshold", "treatment", "final_mod", "label",
   "range", "step", "color", "parameter1", "parameter2", "pval", "CV", "y",
   "id", "time", "method", "initial_value", "rse", "profiled_parameter",
-  "profiled_value", "initialValue", "model", "is_best", "within_delta", "best_model", "best_bicc",
+  "profiled_value", "delta_ofv", "initialValue", "model", "is_best", "within_delta", "best_model", "best_bicc",
   "status", "p_adjusted", "prediction", "group", "popPred", "condition_number"
 ))

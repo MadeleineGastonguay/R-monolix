@@ -39,3 +39,18 @@ test_that("the run log records seeds, hashes and versions", {
   expect_false("decisions" %in% names(log$settings))
   expect_true(length(log$session_info) > 5)
 })
+
+test_that("profile likelihood settings don't belong to step 1, including in older logs", {
+  path <- make_config()
+  config <- read_analysis_config(path)
+  dir <- withr::local_tempdir()
+  write_run_log(config, 1, dir)
+  expect_null(step_settings(config, 1)$step1_igs$profile_likelihood)
+  # a log written when step 1 recorded the profiles
+  log <- yaml::read_yaml(file.path(dir, "run_log.yaml"))
+  log$settings$step1_igs$profile_likelihood <- list(lambda_pop = list(range = c(20, 1000), n = 3))
+  writeLines(as_yaml_text(log), file.path(dir, "run_log.yaml"))
+  expect_true(check_run_log(config, 1, dir))
+  config$step1_igs$profile_likelihood <- list(p_pop = list(range = c(1, 9), n = 3))
+  expect_true(check_run_log(config, 1, dir))
+})

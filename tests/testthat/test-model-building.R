@@ -51,3 +51,39 @@ test_that("backward-elimination entries are ignored", {
   expect_false(tab$best_at_step[9])
   expect_equal(attr(scm_truncated_model(mb), "entry"), 3)
 })
+
+test_that("relationships become Monolix's parameters/covariates/locked table", {
+  r <- model_building_relationships(list(include = list(ta = "vac"), exclude = list(m = c("tlr7", "vac"))))
+  expect_equal(r, data.frame(parameters = c("ta", "m", "m"), covariates = c("vac", "tlr7", "vac"),
+                             locked = c(TRUE, FALSE, FALSE)))
+  expect_equal(model_building_relationships(list(exclude = list(NPs = "tlr7")))$locked, FALSE)
+  expect_null(model_building_relationships(NULL))
+  expect_null(model_building_relationships(list()))
+  expect_null(model_building_relationships(list(include = list())))
+})
+
+test_that("a pair locked into every model doesn't change how the search is read", {
+  # the fixture with m-tlr7 locked in: every model has one more covariate
+  mb <- lapply(scm_fixture(), function(e) { e$individualModels["m", "tlr7"] <- TRUE; e })
+  tab <- scm_results_table(mb)
+  expect_equal(tab$direction, c("base", rep("forward", 7)))
+  expect_equal(tab$n_covariates, c(0, 1, 1, 1, 1, 2, 2, 2) + 1)
+  expect_equal(tab$entry[tab$best_at_step], c(1, 3, 7))
+  expect_equal(unclass(scm_best_model(mb))[c("ta", "m")], list(ta = "vac", m = "tlr7"))
+  ref <- scm_truncated_model(scm_fixture())
+  expect_equal(attr(scm_truncated_model(mb), "entry"), attr(ref, "entry"))
+})
+
+test_that("scm_delta2 covariates removed by Monolix's backward step are flagged", {
+  mb <- fake_mb_backward()
+  expect_equal(scm_results_table(mb)$direction, c("base", rep("forward", 6), "backward", "backward"))
+  expect_equal(unclass(scm_truncated_model(mb))[c("ta", "m")], list(ta = "vac", m = "tlr7"))
+  expect_equal(scm_delta2_removed_backward(mb), data.frame(parameter = "ta", covariate = "vac"))
+  note <- scm_delta2_backward_note(mb)
+  expect_match(note, "scm_delta2 has ta-vac, which Monolix's backward elimination removed")
+  expect_match(note, "scm_delta2_reduced: \\{m: \\[tlr7\\]\\}$")
+
+  # no backward removal of a scm_delta2 pair: no note
+  expect_null(scm_delta2_backward_note(scm_fixture()))
+  expect_equal(nrow(scm_delta2_removed_backward(scm_fixture())), 0)
+})

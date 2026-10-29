@@ -38,19 +38,6 @@ test_that("identifiability_summary flags weakly identified parameters", {
   expect_match(s$flags[s$parameter == "omega_k"], "shrinkage")
 })
 
-fake_candidate <- function(bicc, betas = character(), p = NULL, cn = NULL, runs = 1:4) {
-  te <- rbind(
-    data.frame(parameter = "k_pop", estimate = 1, run = runs),
-    data.frame(parameter = "omega_k", estimate = 0.3 + bicc / 1000, run = runs),
-    if (length(betas)) data.frame(parameter = rep(betas, each = length(runs)), estimate = 0.1, run = runs)
-  )
-  te$rse <- 10
-  te$bicc <- bicc[match(te$run, runs)]
-  out <- list(tabestimates = te)
-  if (!is.null(p)) out$pvals <- data.frame(parameter = betas[1], p.value = p, run = runs)
-  if (!is.null(cn)) out$condition_number <- data.frame(run = runs, condition_number = cn)
-  out
-}
 
 test_that("compare_models counts wins, ties within delta and pairwise differences", {
   igs <- list(
@@ -88,4 +75,56 @@ test_that("fdr adjustment is applied over all models together", {
               b = fake_candidate(c(100, 100), "beta_k_x", p = c(0.03, 0.02), runs = 1:2))
   w <- compare_models(igs, fdr_method = "fdr")$wald
   expect_equal(w$p_adjusted, stats::p.adjust(c(0.01, 0.04, 0.03, 0.02), "fdr"))
+})
+
+test_that("profile_summary finds the lowest OFV and whether the 95% interval is bounded", {
+  pr <- list(lambda_pop = fake_profile("lambda_pop", c(10, 50, 100, 200, 400), c(120, 104, 100, 103, 110)),
+             p_pop = fake_profile("p_pop", c(1, 2, 3), c(100, 100.5, 101)))
+  s <- profile_summary(pr, n_values = c(lambda_pop = 6, p_pop = 3))
+  expect_equal(s$profiled_parameter, c("lambda_pop", "p_pop"))
+  expect_equal(s$profiled_value, c(100, 1))
+  expect_equal(s$ci_lower, c(100, 1)); expect_equal(s$ci_upper, c(200, 3))
+  expect_equal(s$lower_bounded, c(TRUE, FALSE)); expect_equal(s$upper_bounded, c(TRUE, FALSE))
+  expect_equal(s$n_failed, c(1, 0))
+})
+
+test_that("profile_grid uses round numbers, at least n of them", {
+  expect_equal(profile_grid(c(0.5, 20), 10, log10 = TRUE), c(0.5, 0.7, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20))
+  expect_equal(profile_grid(c(0.5, 20), 6, log10 = TRUE), c(0.5, 1, 2, 5, 10, 20))
+  expect_equal(profile_grid(c(0.3, 25), 8, log10 = TRUE), c(0.3, 0.5, 1, 2, 5, 10, 20, 25))  # ends kept
+  expect_equal(profile_grid(c(0.5, 20), 10), c(0.5, seq(2, 20, 2)))
+  expect_equal(profile_grid(c(1, 9), 3), c(1, 5, 9))
+  expect_equal(profile_grid(c(90, 110), 10, log10 = TRUE), seq(90, 110, 2))  # too narrow for log steps
+  for (r in list(c(0.0013, 0.27), c(20, 600), c(1e-4, 1e4))) for (n in c(2, 7, 20)) for (lg in c(TRUE, FALSE)) {
+    g <- profile_grid(r, n, lg)
+    expect_gte(length(g), n); expect_equal(range(g), r); expect_false(is.unsorted(g))
+  }
+})
+
+test_that("wald_note names treatment effects with p >= 0.05 or no p-value", {
+  w <- data.frame(parameter = c("beta_ta_vac_1", "beta_m_vac_1", "beta_NPs_tlr7_1"), `p-value(sa)` = c(1e-4, 0.051, NA),
+                  check.names = FALSE)
+  expect_equal(wald_note(w), "not significant at 5%: beta_m_vac_1 (p = 0.051), beta_NPs_tlr7_1 (no p-value)")
+  expect_equal(wald_note(w[1, ]), "")
+  expect_equal(wald_note(NULL), "")
+  expect_equal(wald_note(w[0, ]), "")
+  expect_equal(wald_note(w, alpha = 0.1), "not significant at 10%: beta_NPs_tlr7_1 (no p-value)")
+  # one p-value column per standard-error method: se_method picks one
+  two <- data.frame(parameter = "beta_ta_vac_1", `p-value(sa)` = 0.2, `p-value(lin)` = 0.01, check.names = FALSE)
+  expect_equal(wald_note(two, se_method = "linearization"), "")
+  expect_match(wald_note(two, se_method = "stochasticApproximation"), "p = 0.2")
+  expect_equal(wald_p_column(data.frame(parameter = "x", p.value = 1)), "p.value")
+  expect_true(is.na(wald_p_column(data.frame(parameter = "x", statistics = 1))))
+})
+
+test_that("compare_models returns estimates relative to each model's best, and condition numbers", {
+  igs <- list(m1 = fake_candidate(c(100, 102, 105, 101), cn = c(10, 20, 30, 40)),
+              m2 = fake_candidate(c(90, 91, 99, 95), cn = c(5, NA, 7, 8)))
+  cmp <- compare_models(igs)
+  e <- cmp$estimates
+  expect_equal(e$delta_bicc[e$model == "m1" & e$parameter == "k_pop"], c(0, 2, 5, 1))
+  expect_equal(e$delta_bicc[e$model == "m2" & e$parameter == "k_pop"], c(0, 1, 9, 5))
+  expect_equal(unique(e$run[e$model_best & e$model == "m1"]), 1)
+  expect_equal(nrow(cmp$condition_numbers), 8)
+  expect_null(compare_models(list(a = fake_candidate(1:4), b = fake_candidate(4:1)))$condition_numbers)
 })

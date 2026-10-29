@@ -17,4 +17,7 @@ Path to the final project, invisibly.
 \description{
 After checkpoint 3: copies the chosen candidate's step 4 project (left at
 its best run) to \code{final_model/final_model.mlxtran} and writes its report.
+Also draws the paired-estimates, normalized boxplot and RSE plots of the
+final model's step 4 runs (\code{\link[=save_final_model_plots]{save_final_model_plots()}}), every time it's
+called.
 }

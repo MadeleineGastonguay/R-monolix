@@ -31,7 +31,7 @@ config_defaults <- function() {
       profile_likelihood = list(),
       plots = list(remove_bicc_outliers = FALSE, remove_estimate_outliers = FALSE)
     ),
-    decisions = list(fixed = NULL, fixed_rationale = NULL),
+    decisions = list(fixed = NULL, fixed_rationale = NULL, fixed_confirmed = NULL),
     step2_igs = list(nits = 100),
     step3_model_building = list(
       method = "SCM", criterion = "BIC", lrt_thresholds = list(forward = 0.05, backward = 0.01),
@@ -56,7 +56,8 @@ TEXT_KEYS <- c("name", "out_folder", "file", "structural_model", "version", "hea
                "expr", "stratify_by", "group_labels", "compare", "candidate_models", "relationships")
 
 # Covariate search methods for step3_model_building.method, and the candidate models each one
-# adds automatically. COSSAC has no stop-rule variant: its path isn't one covariate per step.
+# adds automatically. scm_delta2 is added only with criterion BIC (see auto_candidates()); COSSAC
+# has no stop-rule variant: its path isn't one covariate per step.
 MODEL_BUILDING_METHODS <- c("SCM", "COSSAC")
 METHOD_CANDIDATES <- list(SCM = c("scm_best", "scm_delta2"), COSSAC = "cossac_best")
 # Every name reserved for an automatic candidate
@@ -86,16 +87,23 @@ model_building_methods <- function(config) {
 
 #' Names of the candidate models for step 4
 #'
-#' The automatic candidates of each covariate search method (`scm_best`,
-#' `scm_delta2` for SCM; `cossac_best` for COSSAC), then the hand-written
-#' `candidate_models`.
+#' The automatic candidates of each covariate search method (`scm_best`, and
+#' `scm_delta2` when the criterion is BIC, for SCM; `cossac_best` for COSSAC),
+#' then the hand-written `candidate_models`.
 #'
 #' @inheritParams model_building_methods
 #' @return Character vector.
 #' @export
 candidate_names <- function(config) {
-  c(unlist(METHOD_CANDIDATES[model_building_methods(config)], use.names = FALSE),
-    names(config$step3_model_building$candidate_models))
+  c(auto_candidates(config), names(config$step3_model_building$candidate_models))
+}
+
+# Automatic candidates of the covariate searches that run. scm_delta2 is a BICc stop rule, so
+# it's added only with criterion BIC; with LRT the p-value thresholds already decide when to stop.
+auto_candidates <- function(config, methods = model_building_methods(config)) {
+  out <- unlist(METHOD_CANDIDATES[methods], use.names = FALSE)
+  if (!identical(toupper(config$step3_model_building$criterion %||% ""), "BIC")) out <- setdiff(out, "scm_delta2")
+  out
 }
 
 # Keep y/n/yes/no/on/off as text; only true/false are logicals
@@ -187,7 +195,9 @@ coerce_numbers <- function(x, key = "") {
 #' Checks only what is needed up to `up_to_step`, so the file can be filled in
 #' one step at a time. Every problem found is reported together. If the only
 #' thing missing is a checkpoint decision (`decisions.fixed` before step 2,
+#' `decisions.fixed_confirmed` before step 3 when step 2 ran,
 #' `step3_model_building.candidate_models` before step 3's candidate fits,
+#' `step4_model_comparison.compare` before step 4,
 #' `step4_model_comparison.final_model` before the final model), the error has
 #' class `pipeline_checkpoint` so the driver can stop cleanly.
 #'
@@ -357,9 +367,24 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   if (!is_number(s1$narrow$omega_initial) || s1$narrow$omega_initial <= 0) add("step1_igs.narrow.omega_initial must be positive")
   for (k in names(s1$profile_likelihood)) {
     pl <- s1$profile_likelihood[[k]]
+    pl$range <- unlist(pl$range)  # YAML reads [0.5, 30] (decimal and whole number) as a list
+    pl$values <- unlist(pl$values)
+    key <- paste0("step1_igs.profile_likelihood.", k)
     if (!is.null(params) && !k %in% c(paste0(params, "_pop"), error_params)) add("step1_igs.profile_likelihood: '", k, "' is not a population parameter")
-    if (!is.numeric(pl$range) || length(pl$range) != 2 || pl$range[1] >= pl$range[2]) add("step1_igs.profile_likelihood.", k, ".range must be [min, max]")
-    if (!is_count(pl$n)) add("step1_igs.profile_likelihood.", k, ".n must be a positive whole number")
+    if (!is.null(pl$log10) && !(is.logical(pl$log10) && length(pl$log10) == 1 && !is.na(pl$log10))) {
+      add(key, ".log10 must be true or false")
+    }
+    if (!is.null(pl$values)) {
+      if (!is.null(pl$range) || !is.null(pl$n)) add(key, ": give either values or range and n, not both")
+      if (!is.numeric(pl$values) || length(unique(pl$values)) < 2 || !all(is.finite(pl$values))) {
+        add(key, ".values must be a list of at least 2 different numbers")
+      } else if (isTRUE(pl$log10) && any(pl$values <= 0)) add(key, ": a log10 axis needs values > 0")
+      next
+    }
+    if (!is.numeric(pl$range) || length(pl$range) != 2 || pl$range[1] >= pl$range[2]) {
+      add(key, ".range must be [min, max]")
+    } else if (isTRUE(pl$log10) && pl$range[1] <= 0) add(key, ": a log10 grid needs range min > 0")
+    if (!is_count(pl$n) || pl$n < 2) add(key, ".n must be a whole number of at least 2")
   }
 
   # step 2: fixed parameters (checkpoint 1)
@@ -381,6 +406,16 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
 
   # step 3: model building and candidates (checkpoint 2)
   if (up_to_step >= 3) {
+    # checkpoint 1b: after step 2, confirm nothing else needs fixing (needed before step 3 starts)
+    if (length(config$decisions$fixed)) {
+      fc <- config$decisions$fixed_confirmed
+      if (is.null(fc)) {
+        todo <- c(todo, paste0("decisions.fixed_confirmed (checkpoint 1b): look at step2_igs/identifiability_summary.csv; ",
+                               "true if no other parameter needs fixing, otherwise add it to decisions.fixed and rerun step 2"))
+      } else if (!isTRUE(fc)) {
+        add("decisions.fixed_confirmed must be true, or ~ until you've checked step 2")
+      }
+    }
     s3 <- config$step3_model_building
     methods <- tryCatch(model_building_methods(config), error = function(e) { add(conditionMessage(e)); NULL })
     searching <- length(methods) > 0
@@ -395,13 +430,15 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
       if (!identical(prm, "all") && !is.null(params) && length(setdiff(prm, params))) {
         add("step3_model_building.parameters has unknown parameter(s): ", paste(setdiff(prm, params), collapse = ", "))
       }
-      if ("SCM" %in% methods && (!is_number(s3$scm_stop_rule_delta_bicc) || s3$scm_stop_rule_delta_bicc <= 0)) {
+      check_relationships(s3$relationships, params, cov_cols, prm, covs, add)
+      if ("scm_delta2" %in% auto_candidates(config, methods) &&
+          (!is_number(s3$scm_stop_rule_delta_bicc) || s3$scm_stop_rule_delta_bicc <= 0)) {
         add("step3_model_building.scm_stop_rule_delta_bicc must be positive")
       }
     }
     if (!is_count(s3$initial_value_rounding)) add("step3_model_building.initial_value_rounding must be a positive whole number")
     cm <- s3$candidate_models
-    auto <- unlist(METHOD_CANDIDATES[methods], use.names = FALSE)
+    auto <- if (is.null(methods)) character() else auto_candidates(config, methods)
     if (is.null(cm)) {
       if (up_to_step > 3 || decisions_needed) {
         todo <- c(todo, if (searching) {
@@ -431,14 +468,22 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
     s4 <- config$step4_model_comparison
     if (!is_count(s4$nits)) add("step4_model_comparison.nits must be a positive whole number")
     candidates <- tryCatch(candidate_names(config), error = function(e) character())
+    # checkpoint 2b: compare is decided after step 3's single fits, before step 4 starts
     cmp <- unlist(s4$compare)
-    if (length(setdiff(cmp, candidates))) add("step4_model_comparison.compare has unknown model(s): ", paste(setdiff(cmp, candidates), collapse = ", "),
-                                              " (candidates: ", paste(candidates, collapse = ", "), ")")
-    if (length(cmp) == 1) add("step4_model_comparison.compare needs at least two models, or ~ for all candidates")
+    if (is.null(cmp)) {
+      todo <- c(todo, paste0("step4_model_comparison.compare (checkpoint 2b): look at step3_model_building/candidates/single_fits.csv; ",
+                             "all, or a list of at least two candidates to compare (e.g. [",
+                             paste(unique(c(utils::head(candidates, 1), utils::tail(candidates, 1))), collapse = ", "), "])"))
+    } else if (!identical(cmp, "all")) {
+      if (length(setdiff(cmp, candidates))) add("step4_model_comparison.compare has unknown model(s): ", paste(setdiff(cmp, candidates), collapse = ", "),
+                                                " (candidates: ", paste(candidates, collapse = ", "), ")")
+      if (length(unique(cmp)) < 2) add("step4_model_comparison.compare needs at least two models, or all")
+    }
+    compared <- if (identical(cmp, "all") || is.null(cmp)) candidates else cmp
     if (!isTRUE(s4$fdr_method %in% stats::p.adjust.methods)) add("step4_model_comparison.fdr_method must be one of ", paste(stats::p.adjust.methods, collapse = ", "))
     if (is.null(s4$final_model)) {
       if (decisions_needed) todo <- c(todo, "step4_model_comparison.final_model (checkpoint 3): the candidate to keep as the final model")
-    } else if (!s4$final_model %in% (if (length(cmp)) cmp else candidates)) {
+    } else if (!s4$final_model %in% compared) {
       add("step4_model_comparison.final_model '", s4$final_model, "' is not one of the compared models")
     }
   }
@@ -471,6 +516,35 @@ eval_transform <- function(expr, x) {
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+# step3_model_building.relationships: `include` and `exclude`, each `parameter: [covariates]`,
+# within the parameters and covariates the search uses. `add` records a problem.
+check_relationships <- function(rel, params, cov_cols, prm, covs, add) {
+  if (!length(rel)) return(invisible())
+  key <- "step3_model_building.relationships"
+  if (!is.list(rel) || is.null(names(rel)) || length(setdiff(names(rel), c("include", "exclude")))) {
+    add(key, " takes `include` and/or `exclude`, each as `parameter: [covariates]`, e.g. {include: {ta: [vac]}}")
+    return(invisible())
+  }
+  all_pairs <- list()
+  for (k in names(rel)) {
+    x <- rel[[k]]
+    if (!length(x)) next
+    if (!is.list(x) || is.null(names(x))) { add(key, ".", k, " must be `parameter: [covariates]`, e.g. {ta: [vac]}"); next }
+    p_bad <- if (!is.null(params)) setdiff(names(x), params) else character()
+    if (length(p_bad)) add(key, ".", k, " has unknown parameter(s): ", paste(p_bad, collapse = ", "))
+    p_out <- if (!identical(prm, "all")) setdiff(intersect(names(x), params %||% names(x)), prm) else character()
+    if (length(p_out)) add(key, ".", k, " has parameter(s) not in step3_model_building.parameters: ", paste(p_out, collapse = ", "))
+    c_bad <- if (length(cov_cols)) setdiff(unlist(x), cov_cols) else character()
+    if (length(c_bad)) add(key, ".", k, " has non-covariate column(s): ", paste(c_bad, collapse = ", "))
+    c_out <- if (!identical(covs, "all")) setdiff(intersect(unlist(x), if (length(cov_cols)) cov_cols else unlist(x)), covs) else character()
+    if (length(c_out)) add(key, ".", k, " has covariate(s) not in step3_model_building.covariates: ", paste(c_out, collapse = ", "))
+    all_pairs[[k]] <- paste(rep(names(x), lengths(x)), unlist(x, use.names = FALSE))
+  }
+  both <- intersect(all_pairs$include, all_pairs$exclude)
+  if (length(both)) add(key, ": ", paste(sub(" ", "-", both), collapse = ", "), " is in both include and exclude")
+  invisible()
+}
+
 is_blank <- function(x) is.null(x) || !nzchar(as.character(x)[1])
 is_number <- function(x) is.numeric(x) && length(x) == 1 && is.finite(x)
 is_count <- function(x, zero_ok = FALSE) is_number(x) && x == round(x) && (x > 0 || (zero_ok && x == 0))

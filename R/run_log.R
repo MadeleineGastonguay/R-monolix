@@ -6,7 +6,8 @@
 #' Everything a step's fits depend on, including earlier steps. Labels,
 #' rationales, plot options, report settings and file locations are left out,
 #' so changing them doesn't invalidate cached fits (file contents are checked
-#' by hash instead).
+#' by hash instead). `step1_igs.profile_likelihood` is left out too: the
+#' profiles run after step 1 ([run_profiles()]) and are checked on their own.
 #'
 #' @param config Output of [read_analysis_config()].
 #' @param step 1 to 4.
@@ -24,7 +25,7 @@ step_settings <- function(config, step, before_checkpoint = FALSE) {
     model = model,
     estimation = config$estimation,
     scenario = config$scenario,
-    step1_igs = config$step1_igs[setdiff(names(config$step1_igs), "plots")]
+    step1_igs = config$step1_igs[setdiff(names(config$step1_igs), c("plots", "profile_likelihood"))]
   )
   if (step >= 2) {
     out$decisions <- list(fixed = config$decisions$fixed)
@@ -92,6 +93,8 @@ check_run_log <- function(config, step, dir, before_checkpoint = FALSE) {
   if (!file.exists(path)) return(FALSE)
   log <- yaml::read_yaml(path, handlers = yaml_handlers())
   then <- c(flatten_settings(log$settings), flatten_settings(list(files = log$files)))
+  # logs written before the profiles became their own step recorded them with step 1
+  then <- then[!startsWith(names(then), "step1_igs.profile_likelihood")]
   now <- c(flatten_settings(yaml_roundtrip(step_settings(config, step, before_checkpoint))),
            flatten_settings(list(files = file_hashes(config))))
   keys <- union(names(then), names(now))

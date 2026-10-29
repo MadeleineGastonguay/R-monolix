@@ -13,12 +13,17 @@ run_step3(config, rerun = FALSE)
 }
 \value{
 List with \code{searches} (model-building results per method),
-\code{candidates} (covariate models) and \code{initial_values}.
+\code{candidates} (covariate models), \code{initial_values} and \code{single_fits}
+(each candidate's single fit: BICc, condition number of the correlation
+matrix of the estimates, a note naming treatment effects with Wald
+p >= 0.05, and whether it was fitted or copied).
 }
 \description{
 Starts from step 2's best run (\verb{_pop} values rounded, omegas at
 \code{omega_initial}, treatment effects at 0). Runs each covariate search in
 \code{step3_model_building.method} (none, SCM, COSSAC or both) and saves every
 tested model; then checkpoint 2 (\code{candidate_models}); then builds and fits
-once each candidate from \code{\link[=resolve_candidates]{resolve_candidates()}}.
+once each candidate from \code{\link[=resolve_candidates]{resolve_candidates()}}. \code{scm_best} and
+\code{cossac_best} aren't fitted again: they're copied from the search's final
+model, which was already fitted with the analysis scenario.
 }

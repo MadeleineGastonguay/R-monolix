@@ -3,7 +3,7 @@
 # these files, and every package function they call (directly or further down), for
 # lixoftConnectors calls.
 NO_MONOLIX_FILES <- c("plots_igs.R", "plots_ranges.R", "plots_model_building.R", "plots_fits.R",
-                      "plots_model_comparison.R", "diagnostics.R", "summaries.R", "model_building.R",
+                      "plots_model_comparison.R", "plots_profile.R", "diagnostics.R", "summaries.R", "model_building.R",
                       "selection.R", "sampling.R", "schema.R", "report.R")
 
 # Names of the functions defined at the top level of an R file

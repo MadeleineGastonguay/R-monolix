@@ -227,16 +227,75 @@ record_step <- function(what, run, expr) {
   invisible(NULL)
 }
 
+# Round values for log10 grids: within each factor of 10, the first of these lists that gives
+# enough values. 1-2-5, then denser.
+LOG_GRID_STEPS <- list(c(1, 2, 5), c(1, 2, 3, 5, 7), c(1, 1.5, 2, 3, 4, 5, 7),
+                       c(1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8),
+                       c(1, 1.1, 1.2, 1.3, 1.5, 1.7, 2, 2.2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9))
+
+#' Grid of values for a profile likelihood
+#'
+#' Round numbers between `range[1]` and `range[2]`, plus both ends, with at
+#' least `n` values:
+#' * linear: a round step (1, 2, 2.5 or 5 times a power of 10), the largest
+#'   that gives `n` values, e.g. 0.5, 1, 2, ..., 20;
+#' * log10: within each factor of 10, values from 1-2-5 or a denser list of
+#'   round numbers (1, 1.5, 2, 3, 4, 5, 7, ...), the sparsest that gives `n`
+#'   values, e.g. 0.5, 0.7, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20. A range too
+#'   narrow for that (e.g. 90 to 110) uses a round linear step instead.
+#'
+#' @param range `c(min, max)`.
+#' @param n Smallest number of values; the grid can have a few more.
+#' @param log10 Round numbers on a log10 scale (`TRUE`) or a linear one.
+#' @return Sorted numeric vector.
+#' @export
+profile_grid <- function(range, n, log10 = FALSE) {
+  lo <- range[1]; hi <- range[2]
+  with_ends <- function(x) sort(unique(signif(c(lo, x[x > lo & x < hi], hi), 12)))
+  if (isTRUE(log10)) {
+    decades <- 10^(floor(base::log10(lo)):ceiling(base::log10(hi)))
+    for (steps in LOG_GRID_STEPS) {
+      g <- with_ends(as.vector(outer(steps, decades)))
+      if (length(g) >= n) return(g)
+    }
+  }
+  # linear, or a log range too narrow for the round-number lists
+  k <- floor(base::log10(hi - lo))
+  steps <- sort(as.vector(outer(c(1, 2, 2.5, 5), 10^((k - 6):(k + 1)))), decreasing = TRUE)
+  for (step in steps) {
+    g <- with_ends(seq(ceiling(lo / step), floor(hi / step)) * step)
+    if (length(g) >= n) return(g)
+  }
+  g
+}
+
 #' Profile likelihood for one population parameter
 #'
 #' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #'
+#' Fits the loaded project once per value of `parameter` on a grid of round
+#' numbers over `range` ([profile_grid()]), or on `values`, with `parameter` fixed at that value and everything else estimated.
+#'
+#' @param parameter Population parameter to profile, e.g. `"lambda_pop"`.
+#' @param range `c(min, max)` of the grid.
+#' @param igs Initial values: a table with `name`/`initialValue` (or
+#'   `parameter`/`initial_value`), or a table of estimates (`parameter`,
+#'   `estimate`), whose non-`_pop` values are raised to at least 1.
+#' @param nits Smallest number of grid values (the grid can have a few more).
 #' @param linearize `NULL` (default) uses the project's scenario; `TRUE` or
 #'   `FALSE` overrides it.
+#' @param log10 With `values = NULL`, `TRUE` makes the grid round numbers on a
+#'   log10 scale, `FALSE` (default) on a linear one ([profile_grid()]).
+#' @param values The grid itself, instead of `range`, `nits` and `log10`.
+#' @return Table with one row per grid value and estimated parameter
+#'   (`parameter`, `estimate`, `rse`, `profiled_parameter`, `profiled_value`,
+#'   `ofv`, `aic`, `bic`, `bicc`).
 #' @export
-profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL, record_predictions = F){
+profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL, record_predictions = F,
+                               log10 = FALSE, values = NULL){
   
-  values <- seq(range[1], range[2], length.out = nits)
+  if (is.null(values)) values <- profile_grid(range, nits, log10)
+  nits <- length(values)
   
   initialValues <- igs
   if("estimate" %in% names(igs)){

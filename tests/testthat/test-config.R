@@ -26,6 +26,10 @@ test_that("checkpoints stop with a pipeline_checkpoint condition naming the key"
 
   cfg <- read_analysis_config(make_config(list("  fixed: ~" = "  fixed: {lambda_pop: 50, p_pop: 0.7}")))
   expect_invisible(validate_config(cfg, 2))
+  e <- tryCatch(validate_config(cfg, 3, decisions_needed = FALSE), error = function(e) e)
+  expect_s3_class(e, "pipeline_checkpoint")
+  expect_match(conditionMessage(e), "fixed_confirmed")
+  cfg$decisions$fixed_confirmed <- TRUE
   expect_invisible(validate_config(cfg, 3, decisions_needed = FALSE))
   e <- tryCatch(validate_config(cfg, 3), error = function(e) e)
   expect_s3_class(e, "pipeline_checkpoint")
@@ -39,7 +43,8 @@ test_that("fixed: {} means fix nothing, not undecided", {
 })
 
 test_that("a full config validates through step 4 and catches bad candidates", {
-  repl <- list("  fixed: ~" = "  fixed: {lambda_pop: 50, p_pop: 0.7}",
+  repl <- list("  fixed: ~" = "  fixed: {lambda_pop: 50, p_pop: 0.7}", "  fixed_confirmed: ~" = "  fixed_confirmed: true",
+               "  compare: ~" = "  compare: all",
                "  candidate_models: ~" = "  candidate_models: {am1: {ta: [vac], NPs: [vac, intTLR7VAC]}, am2: {ta: [vac]}}",
                "  final_model: ~" = "  final_model: am1")
   expect_invisible(validate_config(read_analysis_config(make_config(repl)), 4))
@@ -51,6 +56,22 @@ test_that("a full config validates through step 4 and catches bad candidates", {
   expect_match(err, "am3' uses non-covariate column\\(s\\): weight")
   expect_match(err, "am4' has unknown parameter\\(s\\): q")
   expect_match(err, "final_model 'am9'")
+})
+
+test_that("step 3 relationships take include and exclude lists of known pairs", {
+  rel <- function(x, extra = list()) {
+    cfg <- read_analysis_config(make_config(c(list("  fixed: ~" = "  fixed: {}", "  relationships: ~" = paste0("  relationships: ", x)), extra)))
+    tryCatch({ validate_config(cfg, 3, decisions_needed = FALSE); "ok" }, error = function(e) conditionMessage(e))
+  }
+  expect_equal(rel("{include: {ta: [vac]}, exclude: {m: [tlr7, vac]}}"), "ok")
+  expect_equal(rel("{}"), "ok")
+  expect_match(rel("{ta: [vac]}"), "takes `include` and/or `exclude`")
+  err <- rel("{include: {ta: [vac], q: [vac]}, exclude: {ta: [vac], m: [weight]}}")
+  expect_match(err, "include has unknown parameter\\(s\\): q")
+  expect_match(err, "exclude has non-covariate column\\(s\\): weight")
+  expect_match(err, "ta-vac is in both include and exclude")
+  err <- rel("{include: {m: [vac]}}", list("  parameters: all" = "  parameters: [ta, NPs]"))
+  expect_match(err, "include has parameter\\(s\\) not in step3_model_building.parameters: m")
 })
 
 test_that("typos, bad values and unknown parameters are all reported together", {
@@ -161,4 +182,30 @@ test_that("a structural parameter named like an error parameter is caught before
   err <- tryCatch(validate_config(read_analysis_config(path)), error = function(e) conditionMessage(e))
   expect_match(err, "Structural parameter\\(s\\) a clash with Monolix's error-model parameter names")
   expect_equal(reserved_error_names(2), c("a1", "a2", "b1", "b2", "c1", "c2"))
+})
+
+test_that("profile likelihood grids are checked, including mixed-number ranges and listed values", {
+  key <- "  profile_likelihood: {}"
+  cfg <- function(line) read_analysis_config(make_config(setNames(list(line), key)))
+  ok <- cfg("  profile_likelihood: {p_pop: {range: [0.5, 30], n: 15, log10: true}, lambda_pop: {values: [50, 100, 200]}}")
+  expect_silent(validate_config(ok, 1))
+  err <- tryCatch(validate_config(cfg(paste0(
+    "  profile_likelihood: {p_pop: {range: [0, 30], n: 1, log10: true}, m_pop: {range: [1, 9], n: 3, log10: maybe},",
+    " ta_pop: {values: [1, 2], n: 3}, NPs_pop: {values: [2]}, k_pop: {values: [1, 2]}}")), 1), error = conditionMessage)
+  expect_match(err, "p_pop.n must be a whole number of at least 2")
+  expect_match(err, "p_pop: a log10 grid needs range min > 0")
+  expect_match(err, "m_pop.log10 must be true or false")
+  expect_match(err, "ta_pop: give either values or range and n")
+  expect_match(err, "NPs_pop.values must be a list of at least 2")
+  expect_match(err, "'k_pop' is not a population parameter")
+})
+
+test_that("checkpoint 1b asks for fixed_confirmed only when something is fixed", {
+  cp <- function(lines) tryCatch({ validate_config(read_analysis_config(make_config(lines)), 3, decisions_needed = FALSE); "ok" },
+                                 pipeline_checkpoint = function(e) conditionMessage(e), error = function(e) paste("error:", conditionMessage(e)))
+  expect_match(cp(list("  fixed: ~" = "  fixed: {p_pop: 3}")), "decisions.fixed_confirmed \\(checkpoint 1b\\)")
+  expect_equal(cp(list("  fixed: ~" = "  fixed: {p_pop: 3}", "  fixed_confirmed: ~" = "  fixed_confirmed: true")), "ok")
+  expect_equal(cp(list("  fixed: ~" = "  fixed: {}")), "ok")
+  expect_match(cp(list("  fixed: ~" = "  fixed: {p_pop: 3}", "  fixed_confirmed: ~" = "  fixed_confirmed: no")),
+               "error: .*fixed_confirmed must be true")
 })

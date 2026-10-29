@@ -19,9 +19,11 @@ attribute \code{duplicates} (data frame \code{dropped}, \code{same_as}).
 }
 \description{
 Combines the automatic candidates of each covariate search that ran
-(\code{scm_best} and \code{scm_delta2} from SCM, \code{cossac_best} from COSSAC) with the
-hand-written \code{step3_model_building.candidate_models}, keeping only those in
-\code{step4_model_comparison.compare} (all when \code{~}).
+(\code{scm_best}, and \code{scm_delta2} when the criterion is BIC, from SCM;
+\code{cossac_best} from COSSAC) with the
+hand-written \code{step3_model_building.candidate_models}. All of them are fitted
+once in step 3; \code{step4_model_comparison.compare} (checkpoint 2b) picks which
+go on to step 4 (see \code{\link[=step4_models]{step4_models()}}).
 }
 \details{
 Candidates with the same covariate model (e.g. SCM and COSSAC choosing the

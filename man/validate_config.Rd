@@ -22,7 +22,9 @@ through step \code{up_to_step} (candidate models in step 3, final model in step
 Checks only what is needed up to \code{up_to_step}, so the file can be filled in
 one step at a time. Every problem found is reported together. If the only
 thing missing is a checkpoint decision (\code{decisions.fixed} before step 2,
+\code{decisions.fixed_confirmed} before step 3 when step 2 ran,
 \code{step3_model_building.candidate_models} before step 3's candidate fits,
+\code{step4_model_comparison.compare} before step 4,
 \code{step4_model_comparison.final_model} before the final model), the error has
 class \code{pipeline_checkpoint} so the driver can stop cleanly.
 }

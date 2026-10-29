@@ -18,5 +18,8 @@ with attribute \code{skipped}.
 \description{
 Skipped when \code{decisions.fixed} is \code{{}}: the narrow IGS of step 1 is used
 instead. Otherwise the base model with \code{decisions.fixed} applied, sampled
-over step 1's narrow ranges.
+over step 1's narrow ranges. Writes diagnostics, the best run's estimates
+and an identifiability summary of the parameters still estimated
+(\code{\link[=identifiability_summary]{identifiability_summary()}}). Checkpoint 1b (\code{decisions.fixed_confirmed})
+follows: confirm that nothing else needs fixing before step 3.
 }

@@ -63,12 +63,13 @@ step1_igs:  # convergence assessment without covariates
   omega_range: [1, 5]  # wide search, random-effect SDs
   wide_nits: 20
   narrow: {nits: 20, p_threshold: 0.95, min_fold_width: ~, omega_initial: 1}  # min_fold_width: e.g. 2 widens ranges to at least [best/2, 2*best]
-  profile_likelihood: {}  # e.g. {lambda_pop: {range: [20, 1000], n: 99}}
+  profile_likelihood: {}  # run after step 1, e.g. {lambda_pop: {range: [20, 1000], n: 15, log10: true}}
   plots: {remove_bicc_outliers: false, remove_estimate_outliers: false}
 
 decisions:  # filled in by you at the checkpoints
   fixed: ~  # CHECKPOINT 1: e.g. {lambda_pop: 50, p_pop: 0.7}, or {} to fix none
   fixed_rationale: ~
+  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing; set back to ~ when you change fixed
 
 step2_igs: {nits: 20}  # skipped when decisions.fixed is {}
 
@@ -78,16 +79,16 @@ step3_model_building:
   lrt_thresholds: {forward: 0.05, backward: 0.01}  # only used with LRT
   covariates: [tlr7, vac]  # kept small for the example; default all covariate columns
   parameters: [ta, NPs]  # kept small for the example; default all
-  relationships: ~  # parameter-covariate pairs locked into every model
+  relationships: ~  # or {include: {ta: [vac]}, exclude: {NPs: [tlr7]}}: pairs in every model / in none
   use_linearization: false
   initial_value_rounding: 1  # significant figures for _pop initial values
   omega_initial: 1
-  scm_stop_rule_delta_bicc: 2  # for the automatic scm_delta2 candidate
-  candidate_models: ~  # CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 (SCM) and cossac_best (COSSAC) are added automatically
+  scm_stop_rule_delta_bicc: 2  # for the automatic scm_delta2 candidate (criterion BIC only)
+  candidate_models: ~  # CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 (SCM; scm_delta2 with BIC only) and cossac_best (COSSAC) are added automatically
 
 step4_model_comparison:
   nits: 10
-  compare: ~  # ~ = all candidates
+  compare: ~  # CHECKPOINT 2b (after step 3's single fits): all, or a list of candidates to compare
   omega_initial: 1
   treatment_initial: 0
   fdr_method: fdr

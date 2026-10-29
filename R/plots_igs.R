@@ -3,7 +3,10 @@
 # and lixoftConnectors:: prefixes.
 # Changes since porting: parameter order comes from parameter_levels() instead of the loaded
 # Monolix project, so plots can be made from saved results; error parameters found with
-# is_error_param() (a1, b2 ... as well as a, b, c).
+# is_error_param() (a1, b2 ... as well as a, b, c); estimate_boxplots() names the CV row in
+# the subtitle (the label overlapped the first value) and angles the parameter names;
+# plot_vs_rses() puts RSE = 100 in the >=100 group (it fell in none), leaves out estimates
+# without a standard error (with a caption), uses darker oranges and the usual parameter order.
 
 #' Plot BICc against each parameter estimate
 #'
@@ -608,9 +611,10 @@ estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_est
     ggplot_report(aes(factor(parameter), estimate)) + 
     geom_boxplot() + 
     geom_text(data = CV, aes(y = Inf, label = CV), vjust = 1) +
-    annotate("text", -Inf, Inf, label = "CV (%)", vjust = 1, hjust = 0) +
     scale_y_log10(breaks = breaks, limits = range(breaks)) + 
-    labs(x = "Parameter", y = "Normalized Estimate", caption = results_filtered$caption) 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "Parameter", y = "Normalized Estimate", subtitle = "Numbers at the top: CV (%) across runs",
+         caption = results_filtered$caption) 
   
   
   if(out_folder != ""){
@@ -771,17 +775,19 @@ plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = 
   names(tabestimates)[names(tabestimates) == y] <- "y"
   scales <- ifelse(y == "bicc", "free_x", "free")
   
-  plot <- tabestimates %>% mutate(rse = abs(rse)) %>% 
-    arrange(rse) %>% 
-    mutate(color = fct_inorder(case_when(rse < 50~"<50", 
-                                         rse >= 50 & rse < 100~ "50-100",
-                                         rse > 100~ ">100"))) %>% 
-    ggplot_report(aes(abs(rse), y, color = color)) +  
-    geom_point() + 
+  n_missing <- sum(!is.finite(tabestimates$rse))
+  groups <- c("<50", "50-100", ">=100")
+  plot <- tabestimates %>% filter(is.finite(rse)) %>% mutate(rse = abs(rse)) %>% 
+    mutate(parameter = factor(parameter, levels = parameter_levels(.)),
+           color = factor(case_when(rse < 50 ~ "<50", rse < 100 ~ "50-100", TRUE ~ ">=100"), levels = groups)) %>% 
+    ggplot_report(aes(rse, y, color = color)) +  
+    geom_point(size = 2) + 
     scale_x_log10() + 
     facet_wrap(~parameter, scales = scales) + 
-    labs(x = "RSE (%)", y = y, color = "RSE (%)") +
-    scale_color_brewer(palette = "Oranges")
+    labs(x = "RSE (%)", y = if (y == "bicc") "BICc" else y, color = "RSE (%)",
+         caption = if (n_missing) paste0(n_missing, " estimate(s) without a standard error left out") else NULL) +
+    # the darker half of Oranges, so every group shows on white
+    scale_color_manual(values = stats::setNames(c("#FDAE6B", "#E6550D", "#7F2704"), groups), drop = FALSE)
   
   if(!out_folder == ""){
     file <- ifelse(is.null(file_addendum), str_interp("rses_vs_${y}.pdf"), str_interp("rses_vs_${y}${file_addendum}.pdf"))

@@ -4,6 +4,30 @@
 # added at that step; c("", "") for the base model), `individualModels` (logical table,
 # rows = parameters, columns = covariates: the full covariate model) and `bestModel`.
 
+#' Locked relationships for a covariate search, in Monolix's format
+#'
+#' Turns `step3_model_building.relationships` into the table Monolix's
+#' model-building settings take (`getModelBuildingSettings()$relationships`).
+#'
+#' @param relationships `NULL`, or a list with optional `include` and `exclude`,
+#'   each `parameter = covariates` (the format of a `candidate_models` entry).
+#'   Included pairs are in every model the search tests; excluded pairs are in
+#'   none.
+#' @return Data frame with columns `parameters`, `covariates` and `locked`
+#'   (`TRUE` for included, `FALSE` for excluded), or `NULL` if no pair is given.
+#' @export
+model_building_relationships <- function(relationships) {
+  pairs <- function(x, locked) {
+    if (!length(x)) return(NULL)
+    data.frame(parameters = rep(names(x), lengths(x)), covariates = unlist(x, use.names = FALSE),
+               locked = locked, stringsAsFactors = FALSE)
+  }
+  out <- rbind(pairs(relationships$include, TRUE), pairs(relationships$exclude, FALSE))
+  if (is.null(out) || !nrow(out)) return(NULL)
+  rownames(out) <- NULL
+  out
+}
+
 #' Covariate model of one model-building entry
 #'
 #' @param individual_models The `individualModels` table of one entry.
@@ -41,10 +65,11 @@ scm_results_table <- function(mb) {
     stringsAsFactors = FALSE
   )
   # Forward selection runs until the last model with the most covariates; anything after
-  # that removes covariates (backward elimination)
+  # that removes covariates (backward elimination). The base model is the first entry, with
+  # nothing tested; it has covariates when relationships.include locks pairs in.
   last_forward <- max(which(tab$n_covariates == max(tab$n_covariates)))
   tab$direction <- ifelse(tab$entry > last_forward, "backward",
-                          ifelse(tab$n_covariates == 0 & tab$parameter == "", "base", "forward"))
+                          ifelse(tab$entry == 1 & tab$parameter == "", "base", "forward"))
   fwd <- tab$direction != "backward"
   tab$best_at_step <- FALSE
   for (k in unique(tab$n_covariates[fwd])) {
@@ -73,7 +98,9 @@ scm_best_model <- function(mb) {
 #' at the first step where the best added covariate improves BICc by less than
 #' `delta_bicc` over the previous step's model. Returns that previous model:
 #' the `scm_delta2` candidate when `delta_bicc = 2`. Backward-elimination
-#' entries are ignored.
+#' entries are ignored, so the result gets no backward step of its own; at
+#' checkpoint 2 the pipeline warns when it keeps a covariate that Monolix's
+#' backward elimination removed from the larger model.
 #'
 #' @inheritParams scm_results_table
 #' @param delta_bicc Smallest BICc improvement worth adding a covariate for.
@@ -94,6 +121,39 @@ scm_truncated_model <- function(mb, delta_bicc = 2) {
             BICc = as.numeric(mb[[entry]]$BICc), path = path)
 }
 
+# Pairs of the scm_delta2 model that Monolix's backward elimination removed. scm_delta2 is cut
+# from the forward path, so it's never checked by a backward step of its own; every pair in it
+# was in the last forward model, so a pair missing from Monolix's final model was removed
+# backward. Returns a data frame `parameter`, `covariate` (no rows if none).
+scm_delta2_removed_backward <- function(mb, delta_bicc = 2) {
+  pairs <- function(m) {
+    m <- m[lengths(m) > 0]
+    data.frame(parameter = rep(names(m), lengths(m)), covariate = unlist(m, use.names = FALSE), stringsAsFactors = FALSE)
+  }
+  d2 <- pairs(scm_truncated_model(mb, delta_bicc))
+  best <- pairs(scm_best_model(mb))
+  out <- d2[!paste(d2$parameter, d2$covariate) %in% paste(best$parameter, best$covariate), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+# Warning text for scm_delta2_removed_backward(), or NULL
+scm_delta2_backward_note <- function(mb, delta_bicc = 2) {
+  rm <- scm_delta2_removed_backward(mb, delta_bicc)
+  if (!nrow(rm)) return(NULL)
+  d2 <- scm_truncated_model(mb, delta_bicc)
+  without <- lapply(names(d2), function(p) setdiff(d2[[p]], rm$covariate[rm$parameter == p]))
+  names(without) <- names(d2)
+  without <- without[lengths(without) > 0]
+  yaml_model <- if (length(without)) {
+    paste0("{", paste0(names(without), ": [", vapply(without, paste, "", collapse = ", "), "]", collapse = ", "), "}")
+  } else "{}"
+  paste0("scm_delta2 has ", paste(paste0(rm$parameter, "-", rm$covariate), collapse = ", "),
+         ", which Monolix's backward elimination removed from the larger SCM model. scm_delta2 gets no ",
+         "backward step of its own, so consider adding a candidate without ",
+         if (nrow(rm) == 1) "it" else "them", " to candidate_models, e.g. scm_delta2_reduced: ", yaml_model)
+}
+
 # "ta: vac; NPs: tlr7, vac", or "(none)"
 format_covariate_model <- function(cm) {
   if (!length(cm)) return("(none)")
@@ -103,9 +163,11 @@ format_covariate_model <- function(cm) {
 #' Candidate covariate models for step 4
 #'
 #' Combines the automatic candidates of each covariate search that ran
-#' (`scm_best` and `scm_delta2` from SCM, `cossac_best` from COSSAC) with the
-#' hand-written `step3_model_building.candidate_models`, keeping only those in
-#' `step4_model_comparison.compare` (all when `~`).
+#' (`scm_best`, and `scm_delta2` when the criterion is BIC, from SCM;
+#' `cossac_best` from COSSAC) with the
+#' hand-written `step3_model_building.candidate_models`. All of them are fitted
+#' once in step 3; `step4_model_comparison.compare` (checkpoint 2b) picks which
+#' go on to step 4 (see [step4_models()]).
 #'
 #' Candidates with the same covariate model (e.g. SCM and COSSAC choosing the
 #' same covariates) would be fitted twice from the same initial values and tie
@@ -131,18 +193,13 @@ resolve_candidates <- function(config, searches = list()) {
   auto <- list()
   if ("SCM" %in% methods) {
     auto$scm_best <- strip(scm_best_model(searches$SCM))
-    auto$scm_delta2 <- strip(scm_truncated_model(searches$SCM, delta_bicc = delta))
+    if ("scm_delta2" %in% auto_candidates(config, methods)) {
+      auto$scm_delta2 <- strip(scm_truncated_model(searches$SCM, delta_bicc = delta))
+    }
   }
   if ("COSSAC" %in% methods) auto$cossac_best <- strip(scm_best_model(searches$COSSAC))
   hand <- lapply(config$step3_model_building$candidate_models %||% list(), function(m) lapply(m, unlist))
   all <- c(auto, hand)
-
-  cmp <- unlist(config$step4_model_comparison$compare)
-  if (length(cmp)) {
-    unknown <- setdiff(cmp, names(all))
-    if (length(unknown)) stop("step4_model_comparison.compare has unknown model(s): ", paste(unknown, collapse = ", "), call. = FALSE)
-    all <- all[cmp]
-  }
 
   # one key per covariate model, independent of order
   key <- vapply(all, function(m) {
@@ -161,4 +218,35 @@ resolve_candidates <- function(config, searches = list()) {
   }
   if (length(all) < 2) warning("Only ", length(all), " distinct candidate model(s) to compare", call. = FALSE)
   structure(all, duplicates = duplicates)
+}
+
+#' Candidates compared in step 4
+#'
+#' `step4_model_comparison.compare` is `all` or a list of candidate names
+#' (checkpoint 2b, decided after step 3's single fits). A name that step 3
+#' dropped as a duplicate stands for the candidate it duplicates.
+#'
+#' @param config Output of [read_analysis_config()].
+#' @param candidates Output of [resolve_candidates()] (step 3's `candidates`).
+#' @return Character vector of candidate names, in the order given.
+#' @export
+step4_models <- function(config, candidates) {
+  fitted <- names(candidates)
+  cmp <- unlist(config$step4_model_comparison$compare)
+  if (is.null(cmp)) stop("step4_model_comparison.compare is not decided yet (checkpoint 2b)", call. = FALSE)
+  if (identical(cmp, "all")) return(fitted)
+  dup <- attr(candidates, "duplicates")
+  if (!is.null(dup) && nrow(dup)) {
+    i <- match(cmp, dup$dropped)
+    if (any(!is.na(i))) message("Same covariate model as another candidate: ",
+                                paste0(cmp[!is.na(i)], " = ", dup$same_as[i[!is.na(i)]], collapse = "; "))
+    cmp[!is.na(i)] <- dup$same_as[i[!is.na(i)]]
+  }
+  cmp <- unique(cmp)
+  unknown <- setdiff(cmp, fitted)
+  if (length(unknown)) stop("step4_model_comparison.compare has unknown model(s): ", paste(unknown, collapse = ", "),
+                            " (fitted in step 3: ", paste(fitted, collapse = ", "), ")", call. = FALSE)
+  if (length(cmp) < 2) stop("step4_model_comparison.compare names only one distinct model (", cmp,
+                            "); list at least two, or all", call. = FALSE)
+  cmp
 }

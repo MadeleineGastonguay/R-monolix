@@ -11,13 +11,39 @@ profile_likelihood(
   nits,
   use_estimates_as_ig = F,
   linearize = NULL,
-  record_predictions = F
+  record_predictions = F,
+  log10 = FALSE,
+  values = NULL
 )
 }
 \arguments{
+\item{parameter}{Population parameter to profile, e.g. \code{"lambda_pop"}.}
+
+\item{range}{\code{c(min, max)} of the grid.}
+
+\item{igs}{Initial values: a table with \code{name}/\code{initialValue} (or
+\code{parameter}/\code{initial_value}), or a table of estimates (\code{parameter},
+\code{estimate}), whose non-\verb{_pop} values are raised to at least 1.}
+
+\item{nits}{Smallest number of grid values (the grid can have a few more).}
+
 \item{linearize}{\code{NULL} (default) uses the project's scenario; \code{TRUE} or
 \code{FALSE} overrides it.}
+
+\item{log10}{With \code{values = NULL}, \code{TRUE} makes the grid round numbers on a
+log10 scale, \code{FALSE} (default) on a linear one (\code{\link[=profile_grid]{profile_grid()}}).}
+
+\item{values}{The grid itself, instead of \code{range}, \code{nits} and \code{log10}.}
+}
+\value{
+Table with one row per grid value and estimated parameter
+(\code{parameter}, \code{estimate}, \code{rse}, \code{profiled_parameter}, \code{profiled_value},
+\code{ofv}, \code{aic}, \code{bic}, \code{bicc}).
 }
 \description{
 Ported from the SIV_HIV_rebound_kinetics functions.R.
+}
+\details{
+Fits the loaded project once per value of \code{parameter} on a grid of round
+numbers over \code{range} (\code{\link[=profile_grid]{profile_grid()}}), or on \code{values}, with \code{parameter} fixed at that value and everything else estimated.
 }

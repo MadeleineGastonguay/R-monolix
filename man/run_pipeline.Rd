@@ -9,15 +9,16 @@ run_pipeline(config_path = "analysis.yaml", rerun = NULL)
 \arguments{
 \item{config_path}{Path to analysis.yaml.}
 
-\item{rerun}{Steps to refit even if saved results exist: any of \code{1}-\code{4} and
-\code{"final"}. Their folders are deleted first.}
+\item{rerun}{Steps to refit even if saved results exist: any of \code{1}-\code{4},
+\code{"profiles"} and \code{"final"}. Their folders are deleted first.}
 }
 \value{
 Invisibly, a list of the results of the steps that ran, with
 attribute \code{checkpoint} (the message) if it stopped at one.
 }
 \description{
-Runs steps 1 to 4 and the final model in order. At a checkpoint (a decision
+Runs steps 1 to 4 and the final model in order, with the optional profile
+likelihoods (\code{\link[=run_profiles]{run_profiles()}}) after step 1. At a checkpoint (a decision
 still \code{~} in analysis.yaml) it prints what to decide and returns; record the
 decision and call it again. Steps whose saved results match the config are
 loaded, not refitted.

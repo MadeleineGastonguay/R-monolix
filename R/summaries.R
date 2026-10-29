@@ -120,7 +120,12 @@ identifiability_summary <- function(igs, p_threshold = 0.95, method = "spearman"
 #'   * `per_run`: BICc of every model in every paired run;
 #'   * `omegas`: random-effect SDs in each model's best run;
 #'   * `wald`, `wald_summary`: adjusted Wald p-values of treatment effects, and
-#'     per model and effect the share of runs significant at 0.05 and 0.01.
+#'     per model and effect the share of runs significant at 0.05 and 0.01;
+#'   * `estimates`: every estimate of every model in every paired run, with
+#'     `delta_bicc` (BICc minus that model's lowest BICc) and `model_best`
+#'     (that model's best run);
+#'   * `condition_numbers`: condition number of every model in every paired
+#'     run (`NULL` if none were recorded).
 #' @export
 compare_models <- function(igs_list, delta = 2, fdr_method = "fdr") {
   if (is.null(names(igs_list)) || any(!nzchar(names(igs_list)))) stop("igs_list must be a named list", call. = FALSE)
@@ -179,7 +184,7 @@ compare_models <- function(igs_list, delta = 2, fdr_method = "fdr") {
   wald <- do.call(rbind, lapply(models, function(m) {
     p <- igs_list[[m]]$pvals
     if (is.null(p) || !nrow(p)) return(NULL)
-    pcol <- intersect(c("p.value", "pvalue", "p_value"), names(p))[1]
+    pcol <- wald_p_column(p)
     if (is.na(pcol)) stop("No p-value column in the Wald tests of ", m, call. = FALSE)
     data.frame(model = m, run = p$run, parameter = p$parameter, p_value = p[[pcol]])
   }))
@@ -192,8 +197,86 @@ compare_models <- function(igs_list, delta = 2, fdr_method = "fdr") {
                 median_p_adjusted = stats::median(p_adjusted), .groups = "drop")
   }
 
+  # estimates relative to each model's own best run, so models with different BICc share an axis
+  estimates <- te[te$run %in% paired, ]
+  model_min <- tapply(estimates$bicc, estimates$model, min)
+  estimates$delta_bicc <- estimates$bicc - as.numeric(model_min[as.character(estimates$model)])
+  best_run <- vapply(split(per_run, per_run$model), function(d) if (nrow(d)) d$run[which.min(d$bicc)] else NA_real_, numeric(1))
+  estimates$model_best <- estimates$run == best_run[as.character(estimates$model)]
+  rownames(estimates) <- NULL
+  if (!is.null(cn)) {
+    cn <- cn[cn$run %in% paired, ]
+    cn$model <- factor(cn$model, levels = models)
+    rownames(cn) <- NULL
+  }
+
   list(summary = as.data.frame(summary), pairwise = pairwise, per_run = as.data.frame(per_run),
-       omegas = as.data.frame(omegas), wald = wald,
+       omegas = as.data.frame(omegas), wald = wald, estimates = estimates, condition_numbers = cn,
        wald_summary = if (is.null(wald_summary)) NULL else as.data.frame(wald_summary),
        paired_runs = sort(paired), dropped_runs = sort(dropped), delta = delta)
+}
+
+#' Summary of profile likelihoods
+#'
+#' One row per profiled parameter: the grid value with the lowest OFV, and the
+#' approximate 95% confidence interval (grid values whose OFV is within
+#' `threshold` of the lowest). An interval that reaches the end of the grid
+#' isn't bounded there: the data don't rule out values beyond it, so widen the
+#' range or treat the parameter as not identifiable on that side.
+#'
+#' @inheritParams plot_profile_likelihood
+#' @param n_values Optional named vector of grid sizes, to count failed fits.
+#' @return Data frame with `profiled_parameter`, `profiled_value` (lowest OFV),
+#'   `ofv`, `ci_lower`, `ci_upper`, `lower_bounded`, `upper_bounded`,
+#'   `n_fitted` and, with `n_values`, `n_failed`.
+#' @export
+profile_summary <- function(profiles, threshold = stats::qchisq(0.95, 1), n_values = NULL) {
+  pts <- profile_points(profiles)
+  out <- do.call(rbind, lapply(split(pts, pts$profiled_parameter), function(d) {
+    inside <- d$profiled_value[d$ofv <= min(d$ofv) + threshold]
+    data.frame(profiled_parameter = d$profiled_parameter[1],
+               profiled_value = d$profiled_value[which.min(d$ofv)], ofv = min(d$ofv),
+               ci_lower = min(inside), ci_upper = max(inside),
+               lower_bounded = min(inside) > min(d$profiled_value),
+               upper_bounded = max(inside) < max(d$profiled_value),
+               n_fitted = nrow(d))
+  }))
+  if (!is.null(n_values)) out$n_failed <- unname(n_values[out$profiled_parameter]) - out$n_fitted
+  rownames(out) <- NULL
+  out
+}
+
+# The p-value column of Monolix's Wald tests (getTests()$wald): p.value, pvalue, p_value or
+# "p-value(sa)"-style names. With columns for both standard-error methods, `se_method`
+# ("stochasticApproximation" or "linearization") picks one. NA if there's none.
+wald_p_column <- function(wald, se_method = NULL) {
+  cols <- grep("^p[._ -]?value", names(wald), ignore.case = TRUE, value = TRUE)
+  if (length(cols) > 1 && !is.null(se_method)) {
+    tag <- if (se_method == "linearization") "lin" else "sa"
+    pick <- cols[grepl(paste0("\\b", tag, "\\b"), cols, ignore.case = TRUE)]
+    if (length(pick)) cols <- pick
+  }
+  if (length(cols)) cols[1] else NA_character_
+}
+
+#' Treatment effects that aren't significant in a Wald test
+#'
+#' @param wald Monolix's Wald tests (`getTests()$wald`): a `parameter` column
+#'   and a p-value column.
+#' @param alpha Significance level.
+#' @param se_method Standard-error method, to pick the p-value column when
+#'   Monolix gives one per method.
+#' @return `""` if every treatment effect has p < `alpha` (or there are none),
+#'   otherwise a note naming those that don't, with their p-values.
+#' @export
+wald_note <- function(wald, alpha = 0.05, se_method = NULL) {
+  if (is.null(wald) || !nrow(wald)) return("")
+  pcol <- wald_p_column(wald, se_method)
+  if (is.na(pcol)) return("Wald tests have no p-value column")
+  p <- suppressWarnings(as.numeric(wald[[pcol]]))
+  bad <- is.na(p) | p >= alpha
+  if (!any(bad)) return("")
+  paste0("not significant at ", 100 * alpha, "%: ",
+         paste0(wald$parameter[bad], " (", ifelse(is.na(p[bad]), "no p-value", paste0("p = ", signif(p[bad], 2))), ")",
+                collapse = ", "))
 }

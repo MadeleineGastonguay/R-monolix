@@ -64,3 +64,44 @@ save_igs_diagnostics <- function(igs, out_dir, p_threshold = 0.95,
   })
   invisible(do.call(rbind, res))
 }
+
+#' Plots of the final model's step 4 runs
+#'
+#' The paired-estimates plot ([compare_estimates()]: population estimates
+#' against each other across runs, colored by BICc), the normalized boxplots
+#' ([estimate_boxplots()]: each estimate divided by its median, with the CV)
+#' and BICc against RSE ([plot_vs_rses()]), from the final model's runs in the
+#' step 4 comparison. Fixed
+#' parameters (one value in every run) are left out. Doesn't need Monolix.
+#'
+#' @param tabestimates The final model's `tabestimates` from step 4
+#'   (`run_step4()$igs[[final_model]]$tabestimates`).
+#' @param dir Folder to write `paired_SAEM_population_estimates.pdf`,
+#'   `normalized_estimate_boxplots.pdf` and `rses_vs_bicc.pdf` to.
+#' @inheritParams save_igs_diagnostics
+#' @return Invisibly, a data frame with one row per plot: `output`, `ok`,
+#'   `message`.
+#' @export
+save_final_model_plots <- function(tabestimates, dir, remove_bicc_outliers = FALSE, remove_estimate_outliers = FALSE) {
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  varies <- tapply(tabestimates$estimate, tabestimates$parameter, function(x) length(unique(signif(x, 10))) > 1)
+  te <- tabestimates[tabestimates$parameter %in% names(varies)[varies], ]
+  of <- dirname(dir); pn <- basename(dir)
+  rb <- remove_bicc_outliers; re <- remove_estimate_outliers
+  steps <- list(
+    paired_estimates = function() compare_estimates(te, of, pn, remove_estimate_outliers = re, remove_bicc_outliers = rb),
+    estimate_boxplots = function() estimate_boxplots(te, remove_bicc_outliers = rb, remove_estimate_outliers = re,
+                                                     out_folder = of, project_name = pn),
+    rses_vs_bicc = function() plot_vs_rses(te, of, pn))
+  res <- lapply(names(steps), function(nm) {
+    msg <- tryCatch({
+      grDevices::pdf(NULL)
+      on.exit(grDevices::dev.off(), add = TRUE)
+      suppressMessages(steps[[nm]]())
+      ""
+    }, error = function(e) conditionMessage(e))
+    if (nzchar(msg)) cat("Could not write ", nm, ": ", msg, "\n", sep = "")
+    data.frame(output = nm, ok = !nzchar(msg), message = msg, stringsAsFactors = FALSE)
+  })
+  invisible(do.call(rbind, res))
+}

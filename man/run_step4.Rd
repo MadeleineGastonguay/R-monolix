@@ -15,9 +15,12 @@ run_step4(config, rerun = FALSE)
 List with \code{igs} (per candidate), \code{comparison} and \code{initial_values}.
 }
 \description{
-Draws one set of \code{nits} initial values (\verb{_pop} over step 1's narrow ranges,
+Checkpoint 2b first: while \code{step4_model_comparison.compare} is \code{~}, prints
+step 3's single fits (one fit per candidate) and stops, so poor candidates
+can be left out (\code{compare: all}, or a list; see \code{\link[=step4_models]{step4_models()}}). Then draws
+one set of \code{nits} initial values (\verb{_pop} over step 1's narrow ranges,
 omegas at \code{omega_initial}, treatment effects at \code{treatment_initial}, fixed
-parameters fixed) and fits every candidate from the same values, then
+parameters fixed), fits every compared candidate from the same values, and
 compares them with \code{\link[=compare_models]{compare_models()}}. Checkpoint 3 (\code{final_model})
 follows.
 }

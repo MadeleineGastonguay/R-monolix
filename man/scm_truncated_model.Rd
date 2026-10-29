@@ -21,5 +21,7 @@ Walks the forward-selection path of a stepwise covariate search and stops
 at the first step where the best added covariate improves BICc by less than
 \code{delta_bicc} over the previous step's model. Returns that previous model:
 the \code{scm_delta2} candidate when \code{delta_bicc = 2}. Backward-elimination
-entries are ignored.
+entries are ignored, so the result gets no backward step of its own; at
+checkpoint 2 the pipeline warns when it keeps a covariate that Monolix's
+backward elimination removed from the larger model.
 }

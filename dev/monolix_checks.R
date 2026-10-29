@@ -4,7 +4,7 @@
 # to tests/testthat/fixtures/.
 
 # Optional: setwd() to the repo root, and log printed output to a file Claude can read
-# (not committed): sink("dev/monolix_check_output.log", split = TRUE)
+sink("dev/monolix_check_output5.log", split = TRUE)
 # 0. Setup ####
 stopifnot(R.version$arch == "x86_64")   # lixoftConnectors needs x86_64 R
 Sys.getenv("MONOLIX_PATH")              # Expect: the Monolix install path, e.g.
@@ -12,9 +12,9 @@ Sys.getenv("MONOLIX_PATH")              # Expect: the Monolix install path, e.g.
 # If empty: add MONOLIX_PATH=... to ~/.Renviron and restart R.
 
 devtools::load_all()
-init_monolix()   # Expect: no error (runs the theophylline demo; estimates aren't printed)
+# init_monolix()   # Expect: no error (runs the theophylline demo; estimates aren't printed)
 # Without MONOLIX_PATH, pass the path, e.g.
-# init_monolix("/Applications/MonolixSuite2024R1.app/Contents/Resources/monolixSuite/")
+init_monolix("/Applications/MonolixSuite2024R1.app/Contents/Resources/monolixSuite/")
 
 # sink() only captures printed output, so errors, warnings and messages are printed explicitly
 show_conditions <- function(expr) withCallingHandlers(
@@ -301,4 +301,4 @@ cfg_both <- cfg; cfg_both$step3_model_building$method <- list("SCM", "COSSAC")
 cands <- show_conditions(resolve_candidates(cfg_both, searches))
 str(cands)   # Expect: scm_best, scm_delta2, cossac_best (duplicates dropped, with a message)
 
-# sink()   # if logging
+sink()   # if logging

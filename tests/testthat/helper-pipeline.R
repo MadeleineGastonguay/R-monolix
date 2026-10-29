@@ -40,13 +40,25 @@ local_fake_monolix <- function(env, .local_envir = parent.frame()) {
     set_base = function(initial_values, omega_under_1 = FALSE, fixed = NULL) log_call("set_base", initial_values),
     initial_guess_sampling = fake_igs,
     save_igs_diagnostics = function(igs, out_dir, ...) { dir.create(out_dir, recursive = TRUE, showWarnings = FALSE); invisible(NULL) },
-    profile_likelihood = function(parameter, range, igs, nits, ...) {
-      log_call("profile", parameter)
-      data.frame(parameter = parameter, profiled_parameter = parameter, profiled_value = seq(range[1], range[2], length.out = nits), bicc = 100)
+    profile_likelihood = function(parameter, range, igs, nits, log10 = FALSE, values = NULL, ...) {
+      v <- values %||% profile_grid(range, nits, log10)
+      log_call("profile", list(parameter = parameter, values = v, igs = igs, scenario = env$scenario))
+      # one row per estimated parameter and grid value; OFV lowest in the middle of the range
+      g <- expand.grid(parameter = c(setdiff(BASE_PARAMS, parameter)), profiled_value = v, stringsAsFactors = FALSE)
+      data.frame(g[, "parameter", drop = FALSE], estimate = 1, rse = NA, profiled_parameter = parameter,
+                 profiled_value = g$profiled_value, ofv = 100 + 10 * (log(g$profiled_value) - mean(log(range)))^2,
+                 aic = 1, bic = 1, bicc = 1)
     },
-    covariate_model_building = function(projectFile, method, ...) {
-      log_call("search", list(method = method, file = projectFile))
-      readRDS(testthat::test_path("fixtures", "scm_results_synthetic.rds"))
+    covariate_model_building = function(projectFile, method, covariates = "all", parameters = NULL, relationships = NULL, ...) {
+      log_call("search", list(method = method, file = projectFile, covariates = covariates, parameters = parameters,
+                              relationships = relationships))
+      mb <- readRDS(testthat::test_path("fixtures", "scm_results_synthetic.rds"))
+      # like Monolix: the best model saved as <project>/final_model.mlxtran
+      final <- file.path(sub("\\.mlxtran$", "", projectFile), "final_model.mlxtran")
+      dir.create(dirname(final), recursive = TRUE, showWarnings = FALSE)
+      writeLines("fake project", final)
+      env$projects[[normalizePath(final)]] <- list(te = scm_best_model(mb)[])
+      mb
     },
     read_likelihood = function(methods) c(ofv = 1, aic = 2, bic = 3, bicc = 100),
     result_methods = function(linearization = NULL) list(se = "stochasticApproximation", ll = "importanceSampling"),
@@ -55,12 +67,14 @@ local_fake_monolix <- function(env, .local_envir = parent.frame()) {
   )
   testthat::local_mocked_bindings(
     saveProject = function(projectFile = NULL) {
+      log_call("save", normalizePath(projectFile, mustWork = FALSE))
       dir.create(dirname(projectFile), recursive = TRUE, showWarnings = FALSE)
       writeLines("fake project", projectFile)
       env$projects[[normalizePath(projectFile)]] <- list(te = env$current)
       invisible(TRUE)
     },
     loadProject = function(projectFile) {
+      log_call("load", normalizePath(projectFile))
       p <- env$projects[[normalizePath(projectFile)]]
       if (is.null(p)) stop("no such fake project: ", projectFile)
       env$current <- p$te
@@ -68,7 +82,17 @@ local_fake_monolix <- function(env, .local_envir = parent.frame()) {
     },
     getPopulationParameterInformation = function() data.frame(name = params_now(), initialValue = 1, method = "MLE"),
     runScenario = function() invisible(TRUE),
+    getScenario = function() env$scenario %||% list(tasks = c(populationParameterEstimation = TRUE, standardErrorEstimation = TRUE),
+                                                    linearization = FALSE),
+    setScenario = function(scenario) { env$scenario <- scenario; invisible(TRUE) },
     computeChartsData = function(...) invisible(TRUE),
+    # condition number 3 (eigenvalues 1.5 and 0.5); Wald p-values from env$wald_p, else 0.01
+    getCorrelationOfEstimates = function(...) list(stochasticApproximation = matrix(c(1, 0.5, 0.5, 1), 2)),
+    getTests = function(...) {
+      b <- grep("^beta_", params_now(), value = TRUE)
+      p <- vapply(b, function(x) env$wald_p[[x]] %||% 0.01, numeric(1))
+      list(wald = data.frame(parameter = b, statistics = 3, `p-value(sa)` = unname(p), check.names = FALSE))
+    },
     .package = "lixoftConnectors", .env = .local_envir
   )
   invisible(env)

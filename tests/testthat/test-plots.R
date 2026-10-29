@@ -55,6 +55,36 @@ test_that("model comparison plots build from compare_models output", {
   expect_null(plot_treatment_pvalues(cmp))
 })
 
+test_that("BICc-vs-estimate overlays every model; condition numbers get violins", {
+  igs <- list(m1 = fake_candidate(c(100, 102, 105, 101), "beta_k_sex_1", cn = c(10, 20, 30, 40)),
+              m2 = fake_candidate(c(90, 91, 99, 95), cn = c(5, NA, 7, 8)))
+  igs$m1$tabestimates$estimate[igs$m1$tabestimates$parameter == "beta_k_sex_1"] <- c(-0.2, 0.1, 0.3, 0)
+  cmp <- compare_models(igs)
+  p <- plot_bicc_vs_estimate_models(cmp)
+  expect_s3_class(p, "patchwork")
+  # k_pop is the same in every run (fixed): left out; omega_k and the treatment effect stay
+  titles <- vapply(p$patches$plots, function(g) g$labels$title, "")
+  expect_equal(c(titles, p$labels$title %||% character()), c("omega_k", "beta_k_sex_1"))
+  last <- p[[length(p)]]
+  expect_equal(sort(unique(as.character(last$data$model))), "m1")      # only m1 has the effect
+  expect_false(any(vapply(last$scales$scales, function(s) "log10" %in% s$trans$name %||% "", logical(1))))
+  b <- ggplot2::ggplot_build(p[[1]])
+  expect_equal(sort(unique(b$data[[1]]$y)), sort(unique(c(0, 2, 5, 1, 0, 1, 9, 5))))
+  expect_equal(nrow(b$data[[2]]), 2)                                     # one best-run triangle per model
+  capped <- plot_bicc_vs_estimate_models(cmp, max_delta_bicc = 4)
+  expect_match(capped$patches$annotation$caption, "3 model run\\(s\\) more than 4 above their model's best left out")
+
+  cnp <- plot_condition_numbers(cmp)
+  expect_s3_class(cnp, "ggplot")
+  expect_equal(nrow(cnp$data), 7)                                        # the NA run is left out
+  expect_match(cnp$labels$caption, "1 run\\(s\\) without a condition number left out")
+  expect_null(plot_condition_numbers(compare_models(list(a = fake_candidate(1:4), b = fake_candidate(4:1)))))
+
+  dir <- withr_tempdir()
+  files <- suppressMessages(save_comparison_plots(cmp, dir))
+  expect_setequal(basename(files), c("model_comparison.pdf", "condition_numbers.pdf", "bicc_vs_estimates.pdf"))
+})
+
 test_that("plot_individual_fits shows every run and censored observations as open circles", {
   fit <- data.frame(id = rep(1:2, each = 3), time = rep(c(0, 4, 8), 2), y = c(1, 2, 3, 1, 2, 3),
                     popPred = 1, indivPred_mode = 1.5, censored = c(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE))
@@ -75,4 +105,19 @@ test_that("plot_individual_fits shows every run and censored observations as ope
 test_that("package plots use theme_report", {
   p <- ggplot_report(data.frame(x = 1), ggplot2::aes(x, x))
   expect_equal(p$theme$panel.grid.minor, ggplot2::element_blank())
+})
+
+test_that("plot_profile_likelihood draws one panel per parameter with the 95% line", {
+  pr <- list(lambda_pop = fake_profile("lambda_pop", c(10, 100, 1000), c(110, 100, 108)),
+             p_pop = fake_profile("p_pop", c(1, 2, 3), c(101, 100, 102)))
+  g <- plot_profile_likelihood(pr, log10 = "lambda_pop", best = c(lambda_pop = 90))
+  expect_s3_class(g, "patchwork")
+  expect_length(g$patches$plots, 1)   # lambda_pop; p_pop is g itself
+  b <- ggplot2::ggplot_build(g$patches$plots[[1]])$data
+  expect_equal(b[[1]]$yintercept, stats::qchisq(0.95, 1))
+  expect_equal(b[[2]]$y, c(10, 0, 8))   # OFV relative to the lowest
+  expect_equal(b[[2]]$x, c(1, 2, 3))    # log10 axis
+  expect_equal(b[[4]]$xintercept, log10(90))
+  expect_equal(ggplot2::ggplot_build(g)$data[[2]]$x, c(1, 2, 3))   # p_pop: linear
+  expect_equal(g$patches$plots[[1]]$theme$panel.grid.minor, ggplot2::element_blank())
 })

@@ -24,9 +24,14 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
 - `R/`: package code. `fitting.R`, `setup.R`, `selection.R` and `plots_*.R` are ported from the
   SIV `functions.R` (bug fixes noted at the top of each file). `config.R`, `draft_config.R`,
   `mlxtran.R`, `model_spec.R`, `run_log.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
-  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `plots_theme.R`,
+  `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `plots_profile.R`, `plots_theme.R`,
   `report.R`, `simulx.R`, `pipeline.R` are new.
 - `R/pipeline.R`: one function per step (`run_step1()` … `run_final_model()`, `run_pipeline()`).
+  `run_profiles()` runs the optional profile likelihoods after step 1, in a copy of the narrow
+  project, with its own run log; it never refits or changes step 1. When step 2 runs, checkpoint 1b
+  (`decisions.fixed_confirmed: true`) must be recorded before step 3. Checkpoint 2b
+  (`step4_model_comparison.compare`: `all` or a list) comes after step 3's single candidate fits
+  (`single_fits.csv`); `step4_models()` applies it in step 4, so step 3 always fits every candidate.
   `inst/scripts/run_pipeline.R` is the driver script; `inst/examples/synthetic/` is an example
   config on the synthetic data. Pipeline tests use a fake Monolix (`helper-pipeline.R`).
 - `inst/rmarkdown/templates/monolix_report/`: HTML report template, rendered by `generate_report()`
@@ -51,7 +56,7 @@ SIV_HIV_rebound_kinetics project, generalized to any long-format dataset and Mlx
   Tables passed to Monolix keep Monolix's names (`name`, `initialValue`).
 - Monolix's model-building criterion value `"BIC"` means BICc.
 - `step3_model_building.method` is SCM, COSSAC, [SCM, COSSAC] or none. Each search adds
-  automatic candidates (`scm_best`, `scm_delta2`; `cossac_best`); `resolve_candidates()` merges
+  automatic candidates (`scm_best`, plus `scm_delta2` with criterion BIC only; `cossac_best`); `resolve_candidates()` merges
   them with `candidate_models` and fits identical covariate models only once.
 - Error-model parameters are estimated but not sampled; they start at Monolix's defaults
   (a = 1, b = 0.3, c = 1) unless `model.error_initial` overrides them.

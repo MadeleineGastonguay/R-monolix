@@ -22,5 +22,6 @@ Nested list.
 Everything a step's fits depend on, including earlier steps. Labels,
 rationales, plot options, report settings and file locations are left out,
 so changing them doesn't invalidate cached fits (file contents are checked
-by hash instead).
+by hash instead). \code{step1_igs.profile_likelihood} is left out too: the
+profiles run after step 1 (\code{\link[=run_profiles]{run_profiles()}}) and are checked on their own.
 }

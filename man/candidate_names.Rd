@@ -13,7 +13,7 @@ candidate_names(config)
 Character vector.
 }
 \description{
-The automatic candidates of each covariate search method (\code{scm_best},
-\code{scm_delta2} for SCM; \code{cossac_best} for COSSAC), then the hand-written
-\code{candidate_models}.
+The automatic candidates of each covariate search method (\code{scm_best}, and
+\code{scm_delta2} when the criterion is BIC, for SCM; \code{cossac_best} for COSSAC),
+then the hand-written \code{candidate_models}.
 }

@@ -1,5 +1,5 @@
 # step3_model_building.method: SCM, COSSAC, both, or none; and the candidate models each adds
-cfg_with <- function(method, candidates = "~", compare = "~", final = "~") {
+cfg_with <- function(method, candidates = "~", compare = "all", final = "~") {
   read_analysis_config(make_config(list(
     "  method: SCM" = paste0("  method: ", method),
     "  fixed: ~" = "  fixed: {}",
@@ -74,8 +74,44 @@ test_that("SCM and COSSAC choosing the same model are fitted once; order of cova
 })
 
 test_that("with method none, resolve_candidates uses only the hand-written models", {
-  cfg <- cfg_with("none", "{am1: {ta: [vac]}, am2: {NPs: [tlr7]}, am3: {ta: [vac]}}", "[am1, am2]")
-  cm <- resolve_candidates(cfg)
+  cfg <- cfg_with("none", "{am1: {ta: [vac]}, am2: {NPs: [tlr7]}, am3: {ta: [vac]}}")
+  expect_message(cm <- resolve_candidates(cfg), "am3 = am1")
   expect_equal(names(cm), c("am1", "am2"))
-  expect_length(attr(cm, "duplicates")$dropped, 0)
+})
+
+test_that("step 3 fits every candidate; compare (checkpoint 2b) picks the ones for step 4", {
+  hand <- "{am1: {ta: [vac], NPs: [vac]}, am2: {NPs: [tlr7]}, am3: {m: [vac]}}"
+  cm <- suppressMessages(resolve_candidates(cfg_with("SCM", hand, "[am1, am2]"), list(SCM = scm_fixture())))
+  expect_equal(names(cm), c("scm_best", "am1", "am2", "am3"))  # compare doesn't filter step 3
+  expect_equal(step4_models(cfg_with("SCM", hand, "all"), cm), c("scm_best", "am1", "am2", "am3"))
+  expect_equal(step4_models(cfg_with("SCM", hand, "[am2, scm_best]"), cm), c("am2", "scm_best"))
+  # scm_delta2 was dropped as a duplicate of scm_best: it stands for scm_best
+  expect_message(m <- step4_models(cfg_with("SCM", hand, "[scm_delta2, am1]"), cm), "scm_delta2 = scm_best")
+  expect_equal(m, c("scm_best", "am1"))
+  expect_error(suppressMessages(step4_models(cfg_with("SCM", hand, "[scm_delta2, scm_best]"), cm)), "only one distinct model")
+  expect_error(step4_models(cfg_with("SCM", hand, "~"), cm), "checkpoint 2b")
+
+  # until compare is decided, step 4 is a checkpoint
+  err <- tryCatch(validate_config(cfg_with("SCM", hand, "~"), 4, decisions_needed = FALSE),
+                  pipeline_checkpoint = function(e) conditionMessage(e))
+  expect_match(err, "compare \\(checkpoint 2b\\): look at step3_model_building/candidates/single_fits.csv")
+  # final_model must be among the compared models
+  expect_match(problems(cfg_with("SCM", hand, "[am1, am2]", "am3")), "final_model 'am3' is not one of the compared models")
+  expect_equal(problems(cfg_with("SCM", hand, "all", "am3")), "")
+})
+
+test_that("scm_delta2 is a BICc stop rule, so it isn't added with criterion LRT", {
+  lrt <- read_analysis_config(make_config(list(
+    "  fixed: ~" = "  fixed: {}", "  criterion: BIC" = "  criterion: LRT",
+    "  scm_stop_rule_delta_bicc: 2" = "  scm_stop_rule_delta_bicc: ~", "  candidate_models: ~" = "  candidate_models: {}")))
+  expect_equal(candidate_names(lrt), "scm_best")
+  cm <- resolve_candidates(lrt, list(SCM = scm_fixture()))
+  expect_equal(names(cm), "scm_best")
+  expect_equal(nrow(attr(cm, "duplicates")), 0)
+  # the stop rule isn't checked when it isn't used
+  expect_invisible(validate_config(lrt, 3, decisions_needed = FALSE))
+  # scm_delta2 stays reserved, so switching back to BIC can't clash with a hand-written model
+  bad <- read_analysis_config(make_config(list(
+    "  fixed: ~" = "  fixed: {}", "  criterion: BIC" = "  criterion: LRT", "  candidate_models: ~" = "  candidate_models: {scm_delta2: {ta: [vac]}}")))
+  expect_match(problems(bad, 3), "scm_delta2 are reserved")
 })

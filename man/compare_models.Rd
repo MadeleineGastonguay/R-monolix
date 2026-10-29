@@ -26,7 +26,12 @@ treatment effects and median condition number;
 \item \code{per_run}: BICc of every model in every paired run;
 \item \code{omegas}: random-effect SDs in each model's best run;
 \item \code{wald}, \code{wald_summary}: adjusted Wald p-values of treatment effects, and
-per model and effect the share of runs significant at 0.05 and 0.01.
+per model and effect the share of runs significant at 0.05 and 0.01;
+\item \code{estimates}: every estimate of every model in every paired run, with
+\code{delta_bicc} (BICc minus that model's lowest BICc) and \code{model_best}
+(that model's best run);
+\item \code{condition_numbers}: condition number of every model in every paired
+run (\code{NULL} if none were recorded).
 }
 }
 \description{
