@@ -48,7 +48,7 @@ saves records the settings it was made with.
 Install the package from a copy of this repository:
 
 ``` r
-remotes::install_github("MadeleineGastonguay/R-monolix")
+remotes::install_github("MadeleineGastonguay/monolixPipelineR")
 ```
 
 ## Quick start
