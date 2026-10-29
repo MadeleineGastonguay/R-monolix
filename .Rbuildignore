@@ -1,8 +1,6 @@
-^archive$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.DS_Store$
 ^TODO\.md$
 ^dev$
 ^CLAUDE\.md$
-^HANDOFF\.md$
