@@ -348,5 +348,7 @@ test_that("step 3's candidates can be refitted without redoing the search", {
   expect_error(quietly(run_step3(cfg)), "candidate_models")
   out <- quietly(run_step3(cfg, rerun_candidates = TRUE))
   expect_length(calls_of(env, "search"), 1)   # the search was loaded, not rerun
+  # a results page after the search, after each candidate fit, and none when loading
+  expect_equal(vapply(calls_of(env, "figures_page"), `[[`, numeric(1), "x"), c(1, 3, 3, 3))
   expect_true("model1" %in% out$single_fits$model)
 })

@@ -1,0 +1,73 @@
+---
+title: "`r params$title`"
+output:
+  html_document:
+     toc: true
+     toc_float: true
+     toc_depth: 2
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+params:
+  title: "Results"
+  blocks: null
+  fig_dir: ""
+---
+
+```{r setup, include=FALSE}
+# Rendered by render_page() (R/pages.R) in an environment whose parent is the monolixPipelineR
+# namespace. Each block is a section; each item is a figure (drawn to a PNG at its own size), a
+# table or a note. Doesn't need Monolix.
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+options(knitr.kable.NA = "")
+# An HTML table with the page's table style: padded cells, striped rows, numbers on the right,
+# no wider than it needs to be, scrolling sideways if it's wider than the page
+html_table <- function(d) {
+  num <- vapply(d, is.numeric, logical(1))
+  esc <- function(x) gsub(">", "&gt;", gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE), fixed = TRUE), fixed = TRUE)
+  d[!num] <- lapply(d[!num], function(x) esc(as.character(x)))
+  paste0('<div class="table-responsive">',
+         # headers can wrap after an underscore (<wbr>), so long names don't widen the table
+         knitr::kable(d, format = "html", row.names = FALSE, align = ifelse(num, "r", "l"), escape = FALSE,
+                      col.names = gsub("_", "_<wbr>", esc(names(d)), fixed = TRUE),
+                      table.attr = 'class="table table-condensed table-striped" style="width: auto;"'),
+         "</div>")
+}
+```
+
+```{css}
+.table > thead > tr > th, .table > tbody > tr > td { padding: 4px 12px; }
+.table > thead > tr > th { border-bottom: 2px solid #ddd; }
+```
+
+```{r items, results = "asis"}
+i <- 0
+for (block in params$blocks) {
+  cat("\n\n## ", block$title, "\n\n", sep = "")
+  for (item in block$items) {
+    if (!is.null(item$title)) cat("\n\n### ", item$title, "\n\n", sep = "")
+    type <- item$type %||% "figure"
+    if (type == "text") {
+      cat(item$text, "\n\n", sep = "")
+    } else if (type == "table") {
+      if (is.null(item$data) || !nrow(item$data)) {
+        cat("*None.*\n\n")
+      } else {
+        cat("\n\n", html_table(item$data), "\n\n", sep = "")
+      }
+      if (!is.null(item$caption)) cat("*", item$caption, "*\n\n", sep = "")
+    } else {
+      i <- i + 1
+      png <- file.path(params$fig_dir, sprintf("figure_%03d.png", i))
+      msg <- tryCatch({
+        p <- suppressMessages(suppressWarnings(item$draw()))
+        if (is.null(p)) NA_character_ else {
+          suppressMessages(suppressWarnings(ggplot2::ggsave(png, p, width = item$width, height = item$height, dpi = 110)))
+          ""
+        }
+      }, error = function(e) conditionMessage(e))
+      if (is.na(msg)) cat("*Not available for these results.*\n\n")
+      else if (nzchar(msg)) cat("*Could not draw this figure: ", gsub("\n", " ", msg), "*\n\n", sep = "")
+      else cat("![](", png, "){width=100%}\n\n", sep = "")
+    }
+  }
+}
+```

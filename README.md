@@ -83,9 +83,9 @@ unknown parameters or columns, impossible values.
 | 1\. IGS, wide then narrow | Fits the base model from `step1_igs.wide_nits` random starts, then from narrower ranges | `step1_igs/igs_figures.html`, `identifiability_summary.csv` | **Checkpoint 1:** `decisions.fixed`, `decisions.fixed_rationale`, `decisions.random_effects_removed` |
 | Profile likelihoods (optional) | Fits the model with one parameter fixed at each value on a grid | `step1_igs/profile_likelihood/` | (informs checkpoint 1) |
 | 2\. IGS with the decisions | Refits with those parameters fixed and random effects removed; skipped if there are none | `step2_igs/igs_figures.html` | **Checkpoint 1b:** `decisions.fixed_confirmed` |
-| 3a. Covariate search | SCM and/or COSSAC from step 2's best run | `step3_model_building/search/` | **Checkpoint 2:** `step3_model_building.candidate_models` |
-| 3b. Candidate fits | One fit per candidate | `step3_model_building/candidates/single_fits.csv` | **Checkpoint 2b:** `step4_model_comparison.compare` |
-| 4\. Paired comparison | All compared models from the same starting values | `step4_model_comparison/` | **Checkpoint 3:** `step4_model_comparison.final_model`, `step4_model_comparison.final_rationale` |
+| 3a. Covariate search | SCM and/or COSSAC from step 2's best run | `step3_model_building/model_building.html` | **Checkpoint 2:** `step3_model_building.candidate_models` |
+| 3b. Candidate fits | One fit per candidate | `step3_model_building/model_building.html` (its candidates part) | **Checkpoint 2b:** `step4_model_comparison.compare` |
+| 4\. Paired comparison | All compared models from the same starting values | `step4_model_comparison/comparison.html` | **Checkpoint 3:** `step4_model_comparison.final_model`, `step4_model_comparison.final_rationale` |
 | Final model | Refits the chosen model from its best run; writes the report | `final_model/final_model/report.html` |  |
 
 In the YAML, `~` means "not decided yet" and `{}` means "none". A decision left
@@ -192,10 +192,10 @@ results/example/
                           wide/ and narrow/ (figures as PDFs, estimates.csv),
                           profile_likelihood/
   step2_igs/              igs_figures.html, identifiability_summary.csv, diagnostics/
-  step3_model_building/
+  step3_model_building/   model_building.html
     search/               <method>_tested_models.csv, <method>_model_building.pdf, <method>/
     candidates/           <candidate>.mlxtran, single_fits.csv
-  step4_model_comparison/ summary.csv, pairwise.csv, model_comparison.pdf,
+  step4_model_comparison/ comparison.html, summary.csv, pairwise.csv, model_comparison.pdf,
                           bicc_vs_estimates.pdf, condition_numbers.pdf
   final_model/            final_model.mlxtran, final_model/report.html, decision.yaml
   history.yaml            one entry per finished step
@@ -230,6 +230,8 @@ config <- read_analysis_config("analysis.yaml")
 step1 <- readRDS(file.path(pipeline_paths(config)$step1, "results.rds"))
 identifiability_summary(step1$narrow)
 render_igs_figures(config, 1)       # remake step 1's figures page
+render_model_building_page(config)  # step 3's page
+render_comparison_page(config)      # step 4's page
 plot_estimates(step1$narrow$tabestimates)
 read_history(config)
 ```

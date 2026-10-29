@@ -17,6 +17,7 @@ Paths of the files written, invisibly.
 \description{
 Writes \code{model_comparison.pdf} (BICc per run), \code{condition_numbers.pdf},
 \code{bicc_vs_estimates.pdf} (all models overlaid) and \code{treatment_pvalues.pdf}
-to \code{dir}. A plot that can't be drawn is skipped with a message. Doesn't need
-Monolix, so it also works on saved step 4 results.
+(\code{\link[=comparison_figures]{comparison_figures()}}) to \code{dir}. A plot that can't be drawn is skipped
+with a message. Doesn't need Monolix, so it also works on saved step 4
+results.
 }

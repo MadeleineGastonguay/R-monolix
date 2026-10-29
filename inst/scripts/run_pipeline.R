@@ -80,7 +80,8 @@ if (!isTRUE(attr(step2, "skipped"))) identifiability_summary(step2, config$step1
 # Searches covariate effects with step3_model_building.method (SCM, COSSAC, both, or none),
 # starting from step 2's best run. The first time, this stops after the search at
 # checkpoint 2.
-# Results in paths$step3_search:
+# Results: step3_model_building/model_building.html (the search settings, each search's path,
+# the models it tested and the model it chose), and in paths$step3_search:
 #   <method>_tested_models.csv    every model tested, with its BICc
 #   <method>_model_building.pdf   the search path
 #   <method>/                     Monolix's model-building folders and best model
@@ -93,7 +94,8 @@ step3 <- run_step3(config, rerun = RERUN_SEARCH)
 #   best (scm_best, scm_delta2, cossac_best), e.g. {model1: {param1: [cov1]}}; {} for none
 
 # Step 3b: fit each candidate once ####
-# One fit per candidate model, from step 2's best run.
+# One fit per candidate model, from step 2's best run. The fits are added to
+# step3_model_building/model_building.html, with each candidate's estimates and RSEs.
 # Results in paths$step3_candidates:
 #   single_fits.csv               BICc, condition number and Wald-test note per candidate
 #   <candidate>.mlxtran           the fitted projects
@@ -111,6 +113,7 @@ step3$single_fits
 # Fits every compared model from the same sampled starting values (step4_model_comparison.nits
 # runs), so the models are compared run by run.
 # Results in paths$step4:
+#   comparison.html               everything below on one page, plus each model's estimates
 #   summary.csv, pairwise.csv     how often each model fits best, BICc differences
 #   model_comparison.pdf, bicc_vs_estimates.pdf, condition_numbers.pdf
 config <- read_analysis_config(CONFIG)

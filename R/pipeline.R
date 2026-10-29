@@ -13,10 +13,12 @@
 #                        igs_figures.html (every figure on one page)
 #   step2_igs/           fixed.mlxtran, diagnostics/, best_estimates.csv, identifiability_summary.csv,
 #                        igs_figures.html
+#   step3_model_building/             model_building.html (the search and the candidate fits)
 #   step3_model_building/search/      <method>.mlxtran per covariate search, results tables
 #   step3_model_building/candidates/  <candidate>.mlxtran (scm_best and cossac_best copied from
 #                                     the search's final model), candidates.yaml, single_fits.csv
-#   step4_model_comparison/           initial_values.csv, <candidate>.mlxtran, comparison tables
+#   step4_model_comparison/           initial_values.csv, <candidate>.mlxtran, comparison tables,
+#                                     comparison.html
 #   final_model/         final_model.mlxtran and its report, decision.yaml, paired_SAEM_population_estimates.pdf,
 #                        normalized_estimate_boxplots.pdf,
 #                        rses_vs_bicc.pdf (from the final model's step 4 runs)
@@ -412,6 +414,7 @@ run_step3 <- function(config, rerun = FALSE, rerun_candidates = rerun) {
                error = function(e) message("Could not plot the ", m, " search: ", conditionMessage(e)))
     }
     save_step(searches, config, 3, sdir, before_checkpoint = TRUE)
+    figures_page(config, 3)   # the search, for checkpoint 2
   }
 
   # checkpoint 2; while it's undecided, flag scm_delta2 covariates that Monolix's backward step removed
@@ -460,8 +463,10 @@ run_step3 <- function(config, rerun = FALSE, rerun_candidates = rerun) {
   }
   single_fits <- single_fit_table(do.call(rbind, single))
   utils::write.csv(single_fits, file.path(cdir, "single_fits.csv"), row.names = FALSE)
-  save_step(list(searches = searches, candidates = candidates, initial_values = iv, single_fits = single_fits),
-            config, 3, cdir)
+  out <- save_step(list(searches = searches, candidates = candidates, initial_values = iv, single_fits = single_fits),
+                   config, 3, cdir)
+  figures_page(config, 3)   # adds the candidate fits, for checkpoint 2b
+  out
 }
 
 # One row of single_fits.csv, from the loaded project's results: BICc, the condition number of
@@ -557,7 +562,9 @@ run_step4 <- function(config, rerun = FALSE) {
     if (!is.null(comparison[[k]])) utils::write.csv(comparison[[k]], file.path(dir, paste0(k, ".csv")), row.names = FALSE)
   }
   save_comparison_plots(comparison, dir)
-  save_step(list(igs = igs, comparison = comparison, initial_values = iv), config, 4, dir)
+  out <- save_step(list(igs = igs, comparison = comparison, initial_values = iv), config, 4, dir)
+  figures_page(config, 4)
+  out
 }
 
 #' The final model and its report

@@ -126,32 +126,49 @@ plot_treatment_pvalues <- function(cmp) {
     labs(x = "Model", y = "log10 adjusted p-value", linetype = NULL)
 }
 
+#' The step 4 comparison figures
+#'
+#' BICc per run, condition numbers, estimates against BICc with every model
+#' overlaid, and the Wald p-values of the covariate effects, as figures to
+#' draw: used by [save_comparison_plots()] (one PDF each) and
+#' [render_comparison_page()].
+#'
+#' @inheritParams plot_model_comparison
+#' @return Named list; each figure has `title`, `width`, `height` and `draw`
+#'   (a function returning the plot, or `NULL` when there's nothing to draw).
+#' @export
+comparison_figures <- function(cmp) {
+  n_par <- if (is.null(cmp$estimates)) 0 else length(unique(cmp$estimates$parameter))
+  side <- max(2, ceiling(sqrt(n_par)))
+  list(
+    model_comparison = page_figure("BICc per run", 8, 5, function() plot_model_comparison(cmp)),
+    condition_numbers = page_figure("Condition numbers", 8, 5, function() plot_condition_numbers(cmp)),
+    bicc_vs_estimates = page_figure("Estimates against BICc, every model", 3.2 * side, 2.8 * side + 1,
+                                    function() plot_bicc_vs_estimate_models(cmp)),
+    treatment_pvalues = page_figure("Wald p-values of the covariate effects", 10, 7, function() plot_treatment_pvalues(cmp)))
+}
+
 #' Save the step 4 comparison plots
 #'
 #' Writes `model_comparison.pdf` (BICc per run), `condition_numbers.pdf`,
 #' `bicc_vs_estimates.pdf` (all models overlaid) and `treatment_pvalues.pdf`
-#' to `dir`. A plot that can't be drawn is skipped with a message. Doesn't need
-#' Monolix, so it also works on saved step 4 results.
+#' ([comparison_figures()]) to `dir`. A plot that can't be drawn is skipped
+#' with a message. Doesn't need Monolix, so it also works on saved step 4
+#' results.
 #'
 #' @inheritParams plot_model_comparison
 #' @param dir Folder to write to.
 #' @return Paths of the files written, invisibly.
 #' @export
 save_comparison_plots <- function(cmp, dir) {
-  n_par <- if (is.null(cmp$estimates)) 0 else length(unique(cmp$estimates$parameter))
-  side <- max(2, ceiling(sqrt(n_par)))
-  plots <- list(
-    model_comparison = list(function() plot_model_comparison(cmp), 8, 5),
-    condition_numbers = list(function() plot_condition_numbers(cmp), 8, 5),
-    bicc_vs_estimates = list(function() plot_bicc_vs_estimate_models(cmp), 3.2 * side, 2.8 * side + 1),
-    treatment_pvalues = list(function() plot_treatment_pvalues(cmp), 10, 7))
+  figs <- comparison_figures(cmp)
   written <- character()
-  for (nm in names(plots)) {
+  for (nm in names(figs)) {
     f <- file.path(dir, paste0(nm, ".pdf"))
     tryCatch({
-      g <- plots[[nm]][[1]]()
+      g <- figs[[nm]]$draw()
       if (!is.null(g)) {
-        ggsave(f, g, width = plots[[nm]][[2]], height = plots[[nm]][[3]])
+        ggsave(f, g, width = figs[[nm]]$width, height = figs[[nm]]$height)
         written <- c(written, f)
       }
     }, error = function(e) message("Could not draw ", nm, ": ", conditionMessage(e)))

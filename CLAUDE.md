@@ -30,7 +30,7 @@ structural model. README.md is the user guide.
   earlier analysis's scripts (changes since porting noted at the top of each file). `config.R`, `draft_config.R`,
   `mlxtran.R`, `model_spec.R`, `run_log.R`, `history.R`, `scenario.R`, `schema.R`, `sampling.R`, `summaries.R`,
   `model_building.R`, `diagnostics.R`, `plots_fits.R`, `plots_model_comparison.R`, `plots_profile.R`, `plots_theme.R`,
-  `report.R`, `simulx.R`, `pipeline.R` are new.
+  `report.R`, `simulx.R`, `pipeline.R`, `pages.R` are new.
 - `R/pipeline.R`: one function per step (`run_step1()` … `run_final_model()`, `run_pipeline()`).
   `run_profiles()` runs the optional profile likelihoods after step 1, in a copy of the narrow
   project, with its own run log; it never refits or changes step 1. Step 2 runs when checkpoint 1 fixes parameters (`decisions.fixed`)
@@ -41,9 +41,11 @@ structural model. README.md is the user guide.
   (`single_fits.csv`); `step4_models()` applies it in step 4, so step 3 always fits every candidate.
   `inst/scripts/run_pipeline.R` is the driver script; `inst/examples/synthetic/` is an example
   config on the synthetic data. Pipeline tests use a fake Monolix (`helper-pipeline.R`).
-- `inst/rmarkdown/templates/igs_figures/`: one page per IGS step (step 1: wide, ranges, narrow,
-  profiles; step 2) with every figure of `igs_figures()`, written by `render_igs_figures()` from
-  saved results. The PDFs in `wide/`, `narrow/` and `diagnostics/` are the same figures.
+- `inst/rmarkdown/templates/results_page/` and `R/pages.R`: one HTML page per step, from saved
+  results (blocks of figures, tables and notes): `render_igs_figures()` (steps 1 and 2, every figure
+  of `igs_figures()`), `render_model_building_page()` (step 3: the search, then the candidate fits)
+  and `render_comparison_page()` (step 4). The pipeline writes each at the end of its step; the
+  PDFs and CSVs are the same figures and tables.
 - `inst/rmarkdown/templates/monolix_report/`: HTML report template, rendered by `generate_report()`
   in an environment whose parent is the package namespace (it uses package helpers directly).
   Groups, labels and rescaling come from `report.*` and `model.report_transforms` in the config;

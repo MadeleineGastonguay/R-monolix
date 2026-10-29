@@ -1,0 +1,3 @@
+name: Pipeline results page
+description: One pipeline step's figures and tables on one page (IGS figures, covariate search and candidates, model comparison)
+create_dir: false
