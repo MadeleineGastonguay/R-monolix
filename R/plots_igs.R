@@ -9,6 +9,35 @@
 # without a standard error (with a caption), uses darker oranges and the usual parameter order.
 
 #' Plot BICc against each parameter estimate
+#' @param tabestimates Estimates of an initial guess sampling run
+#'   (`tabestimates` from [initial_guess_sampling()]): one row per run and
+#'   parameter, with `parameter`, `run`, `estimate`, `rse` and `bicc`.
+#' @param out_folder,project_name Where to save the figure:
+#'   `file.path(out_folder, project_name)` (a `.mlxtran` ending is dropped).
+#'   With `out_folder = ""` (default) nothing is saved; the plot is only
+#'   returned.
+#' @param narrow `TRUE` marks the best run with a triangle; `FALSE` draws the
+#'   wide-search version, with a dashed line at `BICc_threshold`.
+#' @param remove_bicc_outliers Leave out runs whose BICc is an upper outlier
+#'   ([outlier_detector()]); the caption says so.
+#' @param remove_estimate_outliers Leave out estimates that are outliers for
+#'   their parameter ([outlier_detector()]); the caption says so.
+#' @param log10_x Log10 x axis (not for treatment effects).
+#' @param exclude_treatment_effects Leave out the `beta_` parameters.
+#' @param ylim `c(min, max)` of the BICc axis; runs with a higher BICc are left
+#'   out, and the caption says so.
+#' @param file_addendum Text added to the end of the file name.
+#' @param parameter One parameter to plot, instead of all of them.
+#' @param BICc_threshold With `narrow = FALSE`, the BICc of the dashed line
+#'   (e.g. the highest BICc among the best-supported runs).
+#' @param color `"BICc"` (default) colours points by BICc; a vector of run
+#'   numbers instead highlights those runs.
+#' @param color_label Legend title when `color` is a vector of runs.
+#' @param point_size Size of the points.
+#' @param add_best With `narrow = TRUE`, mark the best run with a triangle.
+#' @param note Text added at the start of the caption, e.g. which runs are
+#'   shown (see [igs_figures()]).
+#' @return A ggplot.
 #' @export
 plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "", narrow = TRUE,
                                  remove_bicc_outliers = FALSE, remove_estimate_outliers = FALSE, log10_x = TRUE, 
@@ -100,6 +129,13 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
 }
 
 #' Compare initial value and final estimate distributions
+#' @inheritParams plot_bicc_v_estimate
+#' @param initialvalues Starting values of the same runs (`initialvalues` from
+#'   [initial_guess_sampling()]): `parameter`, `run`, `initial_value`.
+#' @param parameter_set Which parameters to show: any of `"pop"`, `"omega"`,
+#'   `"beta"` (treatment effects) and `"error"`.
+#' @param save Save the figure to `out_folder`?
+#' @return A ggplot.
 #' @export
 plot_distributions <- function(initialvalues, tabestimates, out_folder = "", project_name = "", parameter_set = "pop",
                                remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
@@ -174,6 +210,10 @@ plot_distributions <- function(initialvalues, tabestimates, out_folder = "", pro
 }
 
 #' Plot final estimates against initial values
+#' @inheritParams plot_distributions
+#' @return A grob with one panel per parameter (draw it with
+#'   [grid::grid.draw()] or save it with [ggplot2::ggsave()]), or, with
+#'   `parameter`, a ggplot with the Pearson correlation.
 #' @export
 plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
                                  remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
@@ -242,6 +282,8 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
 }
 
 #' Correlation between initial values and final estimates
+#' @inheritParams plot_distributions
+#' @return A ggplot.
 #' @export
 cor_iv_estimates <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
                              remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, note = NULL){
@@ -283,6 +325,12 @@ cor_iv_estimates <- function(tabestimates, initialvalues, out_folder = "", proje
 }
 
 #' Heatmap of correlations between estimates across runs
+#' @inheritParams plot_bicc_v_estimate
+#' @param method Correlation method, passed to [stats::cor()].
+#' @param label_threshold Correlations at least this large (in absolute value)
+#'   are written on the tiles.
+#' @param text_color Colour of those labels.
+#' @return A ggplot.
 #' @export
 correlate_estimates <- function(tabestimates, method = "spearman", out_folder = "", project_name = "",
                                 remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE,  file_addendum = "",
@@ -326,6 +374,9 @@ correlate_estimates <- function(tabestimates, method = "spearman", out_folder = 
 }
 
 #' Pairs plot of population estimates across runs
+#' @inheritParams plot_bicc_v_estimate
+#' @param pop_only Only the population (`_pop`) parameters?
+#' @return A GGally `ggmatrix`.
 #' @export
 compare_estimates <- function(tabestimates, out_folder = "", project_name = "", pop_only = TRUE,
                               remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, file_addendum = "",
@@ -373,6 +424,8 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
 }
 
 #' Coefficient of variation of initial values and final estimates
+#' @inheritParams plot_distributions
+#' @return A ggplot.
 #' @export
 calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
                     remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
@@ -414,6 +467,15 @@ calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name =
 }
 
 #' Plot SAEM trajectories for each run
+#' @inheritParams plot_bicc_v_estimate
+#' @param tabiters SAEM iterations of every run (`tabiters` from
+#'   [initial_guess_sampling()]): one column per parameter, plus `iteration`
+#'   and `run`.
+#' @param phase Iteration at which each run switched from the exploratory to
+#'   the smoothing phase (`phase` from [initial_guess_sampling()]).
+#' @param filter Show only iterations from this one on, counted from the
+#'   switch (e.g. `-200`).
+#' @return A patchwork (all parameters) or a ggplot (one parameter).
 #' @export
 plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_name = "",
                       remove_bicc_outliers = FALSE, filter = NULL, parameter = NULL, note = NULL){
@@ -502,6 +564,8 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
 }
 
 #' Plot estimates and RSEs for each run
+#' @inheritParams plot_bicc_v_estimate
+#' @return A patchwork (all parameters) or a ggplot (one parameter).
 #' @export
 plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
                            remove_bicc_outliers = FALSE, parameter = NULL, note = NULL){
@@ -578,6 +642,8 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
 }
 
 #' Boxplots of estimates normalized to their median
+#' @inheritParams plot_bicc_v_estimate
+#' @return A ggplot.
 #' @export
 estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_estimate_outliers = F, 
                               out_folder = "", project_name = "", file_addendum = NULL, note = NULL){
@@ -621,6 +687,13 @@ estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_est
 }
 
 #' Combined diagnostic panel for one parameter
+#' @inheritParams plot_SAEM
+#' @inheritParams plot_distributions
+#' @param parameter The parameter to show.
+#' @param log10_tabestimates Estimates of the wide IGS, for its BICc panel;
+#'   `NULL` to leave it out.
+#' @param tabestimates Estimates of the narrow IGS.
+#' @return A patchwork.
 #' @export
 parameter_plots <- function(parameter, remove_bicc_outliers, remove_estimate_outliers,
                             log10_tabestimates, tabestimates, tabiters,
@@ -760,6 +833,9 @@ parameter_plots <- function(parameter, remove_bicc_outliers, remove_estimate_out
 }
 
 #' Plot RSEs against BICc or another column
+#' @inheritParams plot_bicc_v_estimate
+#' @param y Column plotted against the RSE, `"bicc"` by default.
+#' @return A ggplot.
 #' @export
 plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = "bicc", file_addendum = NULL, note = NULL){
   names(tabestimates)[names(tabestimates) == y] <- "y"
@@ -789,10 +865,14 @@ plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = 
 }
 
 #' Viridis colour scale for BICc
+#' @param ... Passed to [ggplot2::scale_color_viridis_c()].
+#' @return A ggplot2 scale.
 #' @export
 color_bicc <- function(...) scale_color_viridis_c("BICc", direction = -1, ...)
 
 #' Viridis fill scale for BICc
+#' @param ... Passed to [ggplot2::scale_fill_viridis_c()].
+#' @return A ggplot2 scale.
 #' @export
 fill_bicc <- function(...) scale_fill_viridis_c("BICc", direction = -1, ...)
 

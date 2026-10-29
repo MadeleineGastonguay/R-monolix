@@ -6,6 +6,14 @@
 \usage{
 calculate_BICw(tabestimates)
 }
+\arguments{
+\item{tabestimates}{Estimates of an initial guess sampling run, with \code{run}
+and \code{bicc}.}
+}
+\value{
+One row per run, best first: \code{run}, \code{bicc}, its BICc weight \code{w}
+and the cumulative weight \code{cumprob}.
+}
 \description{
 BICc weights and cumulative probability for each run
 }

@@ -3,6 +3,11 @@
 # and lixoftConnectors:: prefixes.
 
 #' Plot and summarise the steps of a stepwise covariate search
+#' @param mb Results of a covariate search
+#'   ([covariate_model_building()], i.e. `getModelBuildingResults()`).
+#' @param ... Passed to [ggplot2::facet_wrap()].
+#' @return List with `plot` (BICc of each tested model, one panel per number
+#'   of covariates) and `summary` (one row per tested model).
 #' @export
 plot_model_building <- function(mb,  ...){
   mb_summary <- mb %>% 

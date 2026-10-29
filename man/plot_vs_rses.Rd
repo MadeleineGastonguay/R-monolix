@@ -13,6 +13,26 @@ plot_vs_rses(
   note = NULL
 )
 }
+\arguments{
+\item{tabestimates}{Estimates of an initial guess sampling run
+(\code{tabestimates} from \code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): one row per run and
+parameter, with \code{parameter}, \code{run}, \code{estimate}, \code{rse} and \code{bicc}.}
+
+\item{out_folder, project_name}{Where to save the figure:
+\code{file.path(out_folder, project_name)} (a \code{.mlxtran} ending is dropped).
+With \code{out_folder = ""} (default) nothing is saved; the plot is only
+returned.}
+
+\item{y}{Column plotted against the RSE, \code{"bicc"} by default.}
+
+\item{file_addendum}{Text added to the end of the file name.}
+
+\item{note}{Text added at the start of the caption, e.g. which runs are
+shown (see \code{\link[=igs_figures]{igs_figures()}}).}
+}
+\value{
+A ggplot.
+}
 \description{
 Plot RSEs against BICc or another column
 }

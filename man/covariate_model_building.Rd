@@ -18,6 +18,25 @@ covariate_model_building(
 )
 }
 \arguments{
+\item{projectFile}{Project to search from (saved first if it doesn't
+exist). Stops if its \code{ModelBuilding} folder already exists.}
+
+\item{method}{\code{"SCM"} or \code{"COSSAC"}.}
+
+\item{criteria}{\code{"BIC"} (Monolix's name for BICc) or \code{"LRT"}.}
+
+\item{covariates}{Covariates to search, or \code{"all"}.}
+
+\item{linearization}{Use linearization during the search.}
+
+\item{relationships}{Parameter-covariate pairs to keep in every model or in
+none, from \code{\link[=model_building_relationships]{model_building_relationships()}}; \code{NULL} for none.}
+
+\item{parameters}{Parameters to search; \code{NULL} for all.}
+
+\item{lrt_thresold}{With \code{criteria = "LRT"}, the p-value thresholds for
+adding and for removing a covariate.}
+
 \item{scenario}{Optional \code{scenario} section of the config, used when the
 best model's tasks have to be rerun. \code{NULL} runs every task without
 linearization.}

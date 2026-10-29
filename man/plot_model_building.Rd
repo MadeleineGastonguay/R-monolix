@@ -6,6 +6,16 @@
 \usage{
 plot_model_building(mb, ...)
 }
+\arguments{
+\item{mb}{Results of a covariate search
+(\code{\link[=covariate_model_building]{covariate_model_building()}}, i.e. \code{getModelBuildingResults()}).}
+
+\item{...}{Passed to \code{\link[ggplot2:facet_wrap]{ggplot2::facet_wrap()}}.}
+}
+\value{
+List with \code{plot} (BICc of each tested model, one panel per number
+of covariates) and \code{summary} (one row per tested model).
+}
 \description{
 Plot and summarise the steps of a stepwise covariate search
 }

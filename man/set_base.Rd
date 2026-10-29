@@ -6,6 +6,19 @@
 \usage{
 set_base(initial_values, omega_under_1 = F, fixed = NULL)
 }
+\arguments{
+\item{initial_values}{Data frame with \code{parameter} and \code{estimate}: the
+starting values. Parameters missing from it keep the project's values;
+treatment effects (\code{beta_}) missing from it start at 0.}
+
+\item{omega_under_1}{Allow random-effect SDs (\code{omega_}) to start below 1?
+By default they start at 1 or more, which helps SAEM converge.}
+
+\item{fixed}{Named values of parameters to fix, e.g. \code{c(param1_pop = 10)}.}
+}
+\value{
+Called for its effect on the loaded project.
+}
 \description{
 Set initial values (and fixed parameters) on the loaded project
 }

@@ -15,6 +15,35 @@ plot_iv_vs_estimates(
   note = NULL
 )
 }
+\arguments{
+\item{tabestimates}{Estimates of an initial guess sampling run
+(\code{tabestimates} from \code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): one row per run and
+parameter, with \code{parameter}, \code{run}, \code{estimate}, \code{rse} and \code{bicc}.}
+
+\item{initialvalues}{Starting values of the same runs (\code{initialvalues} from
+\code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): \code{parameter}, \code{run}, \code{initial_value}.}
+
+\item{out_folder, project_name}{Where to save the figure:
+\code{file.path(out_folder, project_name)} (a \code{.mlxtran} ending is dropped).
+With \code{out_folder = ""} (default) nothing is saved; the plot is only
+returned.}
+
+\item{remove_estimate_outliers}{Leave out estimates that are outliers for
+their parameter (\code{\link[=outlier_detector]{outlier_detector()}}); the caption says so.}
+
+\item{remove_bicc_outliers}{Leave out runs whose BICc is an upper outlier
+(\code{\link[=outlier_detector]{outlier_detector()}}); the caption says so.}
+
+\item{parameter}{One parameter to plot, instead of all of them.}
+
+\item{note}{Text added at the start of the caption, e.g. which runs are
+shown (see \code{\link[=igs_figures]{igs_figures()}}).}
+}
+\value{
+A grob with one panel per parameter (draw it with
+\code{\link[grid:grid.draw]{grid::grid.draw()}} or save it with \code{\link[ggplot2:ggsave]{ggplot2::ggsave()}}), or, with
+\code{parameter}, a ggplot with the Pearson correlation.
+}
 \description{
 Plot final estimates against initial values
 }

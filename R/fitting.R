@@ -21,6 +21,28 @@
 #' @param set_treatment Starting value for every `beta_*` treatment effect.
 #'   Without it, treatment effects start at 0 (they have no sampling range).
 #' @param seed Seed for sampling initial values (`NULL` leaves the RNG alone).
+#' @param initialValue_ranges Sampling ranges: a data frame with one row per
+#'   parameter (row names are the parameter names) and columns `min` and `max`.
+#' @param log10 Names of the parameters sampled uniformly on a log10 scale;
+#'   the others are sampled uniformly.
+#' @param nits Number of runs (failed runs are replaced, up to a limit).
+#' @param set_variance Starting value of every random-effect SD (`omega_`),
+#'   the same in every run; `NULL` samples them from their range.
+#' @param record_shrinkage Record eta shrinkage per run (`shrinkage`).
+#' @param fixed Named values of parameters to fix, e.g.
+#'   `c(param1_pop = 10)`.
+#' @param record_pvals Record the Wald-test p-values of the treatment effects
+#'   per run (`pvals`).
+#' @param record_indiv_params Record the individual parameters
+#'   (`indivParams`) and individual fits (`indivFit`) per run.
+#' @param record_condition_number Record the condition number of the
+#'   correlation matrix of the estimates per run (`condition_number`).
+#' @param record_table Record Monolix's `tables.txt` per run
+#'   (`table_predictions`), for models with a `table = {...}` output.
+#' @return List with `tabestimates` (estimates, RSEs and likelihood of every
+#'   run), `initialvalues`, `tabiters` (SAEM iterations), `phase` and the
+#'   records asked for. After the runs, the project is left at the best run's
+#'   starting values, fitted again.
 #' @export
 initial_guess_sampling <- function(initialValue_ranges, log10 = NULL,
                                    nits = 100, set_variance = NULL, set_treatment = NULL, set_error = NULL,
@@ -285,6 +307,8 @@ profile_grid <- function(range, n, log10 = FALSE) {
 #' @return Table with one row per grid value and estimated parameter
 #'   (`parameter`, `estimate`, `rse`, `profiled_parameter`, `profiled_value`,
 #'   `ofv`, `aic`, `bic`, `bicc`).
+#' @param use_estimates_as_ig Start each grid value's fit from the previous
+#'   fit's estimates instead of from `igs`.
 #' @export
 profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL,
                                log10 = FALSE, values = NULL){
@@ -378,6 +402,17 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 #' @param scenario Optional `scenario` section of the config, used when the
 #'   best model's tasks have to be rerun. `NULL` runs every task without
 #'   linearization.
+#' @param projectFile Project to search from (saved first if it doesn't
+#'   exist). Stops if its `ModelBuilding` folder already exists.
+#' @param method `"SCM"` or `"COSSAC"`.
+#' @param criteria `"BIC"` (Monolix's name for BICc) or `"LRT"`.
+#' @param covariates Covariates to search, or `"all"`.
+#' @param linearization Use linearization during the search.
+#' @param relationships Parameter-covariate pairs to keep in every model or in
+#'   none, from [model_building_relationships()]; `NULL` for none.
+#' @param parameters Parameters to search; `NULL` for all.
+#' @param lrt_thresold With `criteria = "LRT"`, the p-value thresholds for
+#'   adding and for removing a covariate.
 #' @export
 covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
                                      linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01),
@@ -456,6 +491,13 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
 #' Create, fit and report an alternative treatment-effect model
 #' @param report_config Optional config, for the report's grouping and labels
 #'   (see [generate_report()]).
+#' @inheritParams create_project
+#' @param out_folder Folder to save the project in.
+#' @param project_name Project name; it's saved as
+#'   `<out_folder>/<project_name>.mlxtran`.
+#' @param initialvalues Starting values, as for [set_base()]
+#'   (`parameter`, `estimate`).
+#' @return Called for its effects: the fitted project and its report.
 #' @export
 alt_mod <- function(out_folder, project_name, 
                     model_file, data_file, 

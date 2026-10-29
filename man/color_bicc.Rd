@@ -6,6 +6,12 @@
 \usage{
 color_bicc(...)
 }
+\arguments{
+\item{...}{Passed to \code{\link[ggplot2:scale_viridis]{ggplot2::scale_color_viridis_c()}}.}
+}
+\value{
+A ggplot2 scale.
+}
 \description{
 Viridis colour scale for BICc
 }

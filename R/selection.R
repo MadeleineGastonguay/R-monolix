@@ -6,6 +6,10 @@
 # the SIV rule returned no runs when the best run alone carried more than p_threshold).
 
 #' BICc weights and cumulative probability for each run
+#' @param tabestimates Estimates of an initial guess sampling run, with `run`
+#'   and `bicc`.
+#' @return One row per run, best first: `run`, `bicc`, its BICc weight `w`
+#'   and the cumulative weight `cumprob`.
 #' @export
 calculate_BICw <- function(tabestimates){
   # Calculate BICc weights 
@@ -65,6 +69,10 @@ get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NU
 }
 
 #' Flag values outside 1.5 IQR
+#' @param value Numeric vector.
+#' @param upper_only Flag only values above the upper limit.
+#' @return Logical vector: `TRUE` for values more than 1.5 times the
+#'   interquartile range above the 3rd quartile (or below the 1st).
 #' @export
 outlier_detector <- function(value, upper_only = F){
   if(upper_only){
@@ -77,6 +85,12 @@ outlier_detector <- function(value, upper_only = F){
 }
 
 #' Optionally drop outlier runs or estimates, returning a caption
+#' @param tabestimates Estimates of an initial guess sampling run.
+#' @param remove_estimate_outliers Leave out estimates that are outliers for
+#'   their parameter ([outlier_detector()]).
+#' @param remove_bicc_outliers Leave out runs whose BICc is an upper outlier.
+#' @return List with the filtered `tabestimates` and a `caption` saying what
+#'   was left out.
 #' @export
 filter_results <- function(tabestimates, remove_estimate_outliers, remove_bicc_outliers){
   

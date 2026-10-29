@@ -6,6 +6,15 @@
 \usage{
 outlier_detector(value, upper_only = F)
 }
+\arguments{
+\item{value}{Numeric vector.}
+
+\item{upper_only}{Flag only values above the upper limit.}
+}
+\value{
+Logical vector: \code{TRUE} for values more than 1.5 times the
+interquartile range above the 3rd quartile (or below the 1st).
+}
 \description{
 Flag values outside 1.5 IQR
 }

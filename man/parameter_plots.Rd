@@ -15,6 +15,33 @@ parameter_plots(
   initialvalues
 )
 }
+\arguments{
+\item{parameter}{The parameter to show.}
+
+\item{remove_bicc_outliers}{Leave out runs whose BICc is an upper outlier
+(\code{\link[=outlier_detector]{outlier_detector()}}); the caption says so.}
+
+\item{remove_estimate_outliers}{Leave out estimates that are outliers for
+their parameter (\code{\link[=outlier_detector]{outlier_detector()}}); the caption says so.}
+
+\item{log10_tabestimates}{Estimates of the wide IGS, for its BICc panel;
+\code{NULL} to leave it out.}
+
+\item{tabestimates}{Estimates of the narrow IGS.}
+
+\item{tabiters}{SAEM iterations of every run (\code{tabiters} from
+\code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): one column per parameter, plus \code{iteration}
+and \code{run}.}
+
+\item{phase}{Iteration at which each run switched from the exploratory to
+the smoothing phase (\code{phase} from \code{\link[=initial_guess_sampling]{initial_guess_sampling()}}).}
+
+\item{initialvalues}{Starting values of the same runs (\code{initialvalues} from
+\code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): \code{parameter}, \code{run}, \code{initial_value}.}
+}
+\value{
+A patchwork.
+}
 \description{
 Combined diagnostic panel for one parameter
 }

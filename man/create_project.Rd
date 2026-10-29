@@ -20,10 +20,35 @@ create_project(
 )
 }
 \arguments{
+\item{model_file}{Path to the Mlxtran structural model.}
+
+\item{data_file}{Path to the data file.}
+
+\item{headerTypes}{Monolix column type of each data column, in data order
+(e.g. \code{"id"}, \code{"time"}, \code{"observation"}, \code{"catcov"}).}
+
+\item{error_model}{Error model of each observation, e.g.
+\code{list(y = "combined1")}.}
+
+\item{exclude_random_effects}{Parameters without a random effect.}
+
+\item{treatment_effects}{Named list of covariates per parameter, e.g.
+\code{list(param1 = "cov1")}; \code{NULL} for none.}
+
+\item{normal_dist}{Parameters with a normal distribution (older form of
+\code{distributions}).}
+
+\item{fixed}{Named values of parameters to fix, e.g. \code{c(param1_pop = 10)}.}
+
+\item{linearize}{Use linearization for standard errors and the likelihood.}
+
 \item{distributions}{Named character vector or list of parameter
 distributions, e.g. \code{c(param1 = "normal")}.}
 
 \item{estimation, scenario}{Passed to \code{\link[=set_project_settings]{set_project_settings()}}.}
+}
+\value{
+Called for its effect: the new project is loaded in Monolix.
 }
 \description{
 With a config, use \code{\link[=setup_project]{setup_project()}} instead, which takes everything from a \code{\link[=model_spec]{model_spec()}}.

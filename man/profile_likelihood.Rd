@@ -26,6 +26,9 @@ profile_likelihood(
 
 \item{nits}{Smallest number of grid values (the grid can have a few more).}
 
+\item{use_estimates_as_ig}{Start each grid value's fit from the previous
+fit's estimates instead of from \code{igs}.}
+
 \item{linearize}{\code{NULL} (default) uses the project's scenario; \code{TRUE} or
 \code{FALSE} overrides it.}
 

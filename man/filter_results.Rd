@@ -6,6 +6,18 @@
 \usage{
 filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
 }
+\arguments{
+\item{tabestimates}{Estimates of an initial guess sampling run.}
+
+\item{remove_estimate_outliers}{Leave out estimates that are outliers for
+their parameter (\code{\link[=outlier_detector]{outlier_detector()}}).}
+
+\item{remove_bicc_outliers}{Leave out runs whose BICc is an upper outlier.}
+}
+\value{
+List with the filtered \code{tabestimates} and a \code{caption} saying what
+was left out.
+}
 \description{
 Optionally drop outlier runs or estimates, returning a caption
 }

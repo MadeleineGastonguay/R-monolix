@@ -16,6 +16,37 @@ plot_SAEM(
   note = NULL
 )
 }
+\arguments{
+\item{tabiters}{SAEM iterations of every run (\code{tabiters} from
+\code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): one column per parameter, plus \code{iteration}
+and \code{run}.}
+
+\item{phase}{Iteration at which each run switched from the exploratory to
+the smoothing phase (\code{phase} from \code{\link[=initial_guess_sampling]{initial_guess_sampling()}}).}
+
+\item{tabestimates}{Estimates of an initial guess sampling run
+(\code{tabestimates} from \code{\link[=initial_guess_sampling]{initial_guess_sampling()}}): one row per run and
+parameter, with \code{parameter}, \code{run}, \code{estimate}, \code{rse} and \code{bicc}.}
+
+\item{out_folder, project_name}{Where to save the figure:
+\code{file.path(out_folder, project_name)} (a \code{.mlxtran} ending is dropped).
+With \code{out_folder = ""} (default) nothing is saved; the plot is only
+returned.}
+
+\item{remove_bicc_outliers}{Leave out runs whose BICc is an upper outlier
+(\code{\link[=outlier_detector]{outlier_detector()}}); the caption says so.}
+
+\item{filter}{Show only iterations from this one on, counted from the
+switch (e.g. \code{-200}).}
+
+\item{parameter}{One parameter to plot, instead of all of them.}
+
+\item{note}{Text added at the start of the caption, e.g. which runs are
+shown (see \code{\link[=igs_figures]{igs_figures()}}).}
+}
+\value{
+A patchwork (all parameters) or a ggplot (one parameter).
+}
 \description{
 Plot SAEM trajectories for each run
 }

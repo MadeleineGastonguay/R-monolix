@@ -49,6 +49,20 @@ set_project_settings <- function(linearize = FALSE, estimation = NULL, scenario 
 #' @param distributions Named character vector or list of parameter
 #'   distributions, e.g. `c(param1 = "normal")`.
 #' @param estimation,scenario Passed to [set_project_settings()].
+#' @param model_file Path to the Mlxtran structural model.
+#' @param data_file Path to the data file.
+#' @param headerTypes Monolix column type of each data column, in data order
+#'   (e.g. `"id"`, `"time"`, `"observation"`, `"catcov"`).
+#' @param error_model Error model of each observation, e.g.
+#'   `list(y = "combined1")`.
+#' @param exclude_random_effects Parameters without a random effect.
+#' @param treatment_effects Named list of covariates per parameter, e.g.
+#'   `list(param1 = "cov1")`; `NULL` for none.
+#' @param normal_dist Parameters with a normal distribution (older form of
+#'   `distributions`).
+#' @param fixed Named values of parameters to fix, e.g. `c(param1_pop = 10)`.
+#' @param linearize Use linearization for standard errors and the likelihood.
+#' @return Called for its effect: the new project is loaded in Monolix.
 #' @export
 create_project <- function(model_file, data_file, 
                            headerTypes, error_model, 
@@ -110,6 +124,13 @@ create_project <- function(model_file, data_file,
 }
 
 #' Set initial values (and fixed parameters) on the loaded project
+#' @param initial_values Data frame with `parameter` and `estimate`: the
+#'   starting values. Parameters missing from it keep the project's values;
+#'   treatment effects (`beta_`) missing from it start at 0.
+#' @param omega_under_1 Allow random-effect SDs (`omega_`) to start below 1?
+#'   By default they start at 1 or more, which helps SAEM converge.
+#' @param fixed Named values of parameters to fix, e.g. `c(param1_pop = 10)`.
+#' @return Called for its effect on the loaded project.
 #' @export
 set_base <- function(initial_values, omega_under_1 = F, fixed = NULL){
   

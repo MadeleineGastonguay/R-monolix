@@ -81,5 +81,5 @@ The driver (R/pipeline.R, inst/scripts/run_pipeline.R) is tested only with a fak
   through the scenario still gives the importance-sampling OFV, and that saving the narrow
   project as profile.mlxtran leaves step1_igs/narrow/ unchanged.
 - Generality: step 1 on Monolix's theophylline demo with only a new analysis.yaml.
-- `R CMD check` (2026-10-29): no errors; one warning left: 24 ported functions have arguments
-  without `@param` docs (`initial_guess_sampling()`, the IGS plots, `set_base()`, ...).
+- (Done 2026-10-29: `R CMD check` passes with no errors or warnings; the only note is the check
+  environment not verifying the current time.)
