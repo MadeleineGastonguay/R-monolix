@@ -242,6 +242,14 @@ read_history(config)
 [3] Cassidy et al., Bull. Math. Biol., 2026
 
 ## Attributions
-Madeleine S. Gastonguay designed the workflow and wrote the original analysis code, which fit a nonlinear mixed effects model to viral rebound kinetics after immunotherapy. That code is the basis for the package’s core functions: multi-start fitting from sampled starting values, narrowing the sampling ranges, covariate model building, the IGS diagnostic plots and the HTML report for a fitted Monolix project.
+Madeleine S. Gastonguay designed the workflow and wrote the original analysis code, which fit a nonlinear mixed effects model to viral rebound kinetics after immunotherapy. That code is the basis for the package’s core functions: multi-start fitting from sampled starting values, narrowing the sampling ranges, covariate model building, the IGS diagnostic plots and the HTML report for a fitted Monolix project. These functions already took the model, data and statistical model as arguments.
 
-Claude Code (Claude Opus 5.5, Anthropic) was used to generalize that code to any structural model and dataset and built the package around it: the step-by-step pipeline with its checkpoints, the analysis.yaml settings, run logs and history, the figure pages, the tests and the documentation, and it adapted the report to take its groups, labels and rescaling from the settings. Madeleine S. Gastonguay directed and reviewed this work and checked it with real Monolix runs.
+Claude Code (Claude Opus 5.5, Anthropic) was used to add a layer around these functions so a new analysis needs only a model, a dataset and a settings file. That layer is:
+
+- the analysis.yaml settings and their checks;
+- the step-by-step pipeline with its checkpoints;
+- run logs and history;
+- the figure html pages;
+- the tests and documentation.
+
+It also removed the parts that were specific to the original study and replaced them with generalized functions. Madeleine S. Gastonguay directed and reviewed this work and checked it with Monolix runs.
