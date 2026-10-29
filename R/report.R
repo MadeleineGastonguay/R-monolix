@@ -3,11 +3,10 @@
 
 #' Group of each individual, from the report's stratifying covariates
 #'
-#' Replaces the SIV-specific treatment groups (tlr7/vac/ab/nnrti) in the
-#' report. A group key is the individual's values of `stratify_by` joined
-#' with "." in `stratify_by` order, e.g. `"1.0"` for `tlr7 = 1, vac = 0`.
+#' A group key is the individual's values of `stratify_by` joined with "."
+#' in `stratify_by` order, e.g. `"1.0"` for `cov1 = 1, cov2 = 0`.
 #' `group_labels` (`report.group_labels` in the config) names keys; unnamed
-#' keys are shown as `tlr7=1, vac=0`.
+#' keys are shown as `cov1=1, cov2=0`.
 #'
 #' @param data The analysis data set.
 #' @param id_column Name of the id column in `data`.
@@ -42,9 +41,8 @@ report_groups <- function(data, id_column = "id", stratify_by = NULL, group_labe
 #' Rescale population estimates for reporting
 #'
 #' Applies `model.report_transforms` (per parameter a `label` and an `expr` in
-#' `x`, e.g. `{NPs_pop: {label: NP_pop, expr: "x * 10^5"}}`) to the estimate
-#' and any confidence limits. Replaces the hard-coded `betas_pop` and
-#' `NPs_pop` scaling in the SIV report.
+#' `x`, e.g. `{param1_pop: {label: "param1 (units)", expr: "x * 10^5"}}`) to
+#' the estimate and any confidence limits.
 #'
 #' @param estimates Data frame with `parameter` and `estimate`, and optionally
 #'   `P2.5` and `P97.5`.

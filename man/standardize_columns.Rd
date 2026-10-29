@@ -17,9 +17,8 @@ profiled parameter.}
 format are returned unchanged.
 }
 \description{
-Converts tables produced by the earlier SIV_HIV_rebound_kinetics scripts:
-\code{rses} becomes \code{rse}, \code{initialValue} becomes \code{initial_value} and \code{am}
+Converts tables that use older column names: \code{rses} becomes \code{rse}, \code{initialValue} becomes \code{initial_value} and \code{am}
 becomes \code{model}. Old profile likelihood tables stored the profiled value in
-a column named after the parameter (e.g. \code{lambda_pop}); pass that name as
+a column named after the parameter (e.g. \code{param1_pop}); pass that name as
 \code{profiled_parameter} to convert it to \code{profiled_parameter}/\code{profiled_value}.
 }

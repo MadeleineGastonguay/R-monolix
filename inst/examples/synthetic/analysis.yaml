@@ -40,7 +40,7 @@ model:
     NPs_pop: {label: NP_pop, expr: x * 10^5}  # from `NP = NPs * 10^5` in the model
     betas_pop: {label: beta_pop, expr: x * 10^(-7)}  # from `beta = betas * 10^(-7)` in the model
 
-estimation:  # defaults used in the SIV analysis
+estimation:  # Monolix's SAEM settings
   saem: {burn_in: 20, exploratory: 300, smoothing: 100, smoothing_alpha: 0.7, exploratory_autostop: true, smoothing_autostop: true}
 
 scenario:  # Monolix tasks run for every fit
@@ -69,9 +69,10 @@ step1_igs:  # convergence assessment without covariates
 decisions:  # filled in by you at the checkpoints
   fixed: ~  # CHECKPOINT 1: e.g. {lambda_pop: 50, p_pop: 0.7}, or {} to fix none
   fixed_rationale: ~
-  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing; set back to ~ when you change fixed
+  random_effects_removed: []  # CHECKPOINT 1 (optional): parameters to drop the random effect of from step 2 on, e.g. [ta]
+  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing or removing; set back to ~ when you change fixed or random_effects_removed
 
-step2_igs: {nits: 20}  # skipped when decisions.fixed is {}
+step2_igs: {nits: 20}  # skipped when decisions.fixed is {} and random_effects_removed is []
 
 step3_model_building:
   method: SCM  # SCM, COSSAC, [SCM, COSSAC] to run and compare both, or none to compare only candidate_models

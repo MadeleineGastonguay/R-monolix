@@ -19,7 +19,6 @@ without a transform are reported as they are.
 }
 \description{
 Applies \code{model.report_transforms} (per parameter a \code{label} and an \code{expr} in
-\code{x}, e.g. \verb{\{NPs_pop: \{label: NP_pop, expr: "x * 10^5"\}\}}) to the estimate
-and any confidence limits. Replaces the hard-coded \code{betas_pop} and
-\code{NPs_pop} scaling in the SIV report.
+\code{x}, e.g. \verb{\{param1_pop: \{label: "param1 (units)", expr: "x * 10^5"\}\}}) to
+the estimate and any confidence limits.
 }

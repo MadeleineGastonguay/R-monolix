@@ -9,7 +9,8 @@ save_igs_diagnostics(
   out_dir,
   p_threshold = 0.95,
   remove_bicc_outliers = FALSE,
-  remove_estimate_outliers = FALSE
+  remove_estimate_outliers = FALSE,
+  sets_ranges = FALSE
 )
 }
 \arguments{
@@ -17,18 +18,22 @@ save_igs_diagnostics(
 
 \item{out_dir}{Folder to write to (created if needed).}
 
-\item{p_threshold}{Cumulative BICc weight for the identifiability summary.}
+\item{p_threshold}{Cumulative BICc weight defining the best-supported runs.}
 
 \item{remove_bicc_outliers, remove_estimate_outliers}{Passed to the plots
-that support them (\code{step1_igs.plots} in the config); the plot caption says
+that support them (\code{step1_igs.plots} in the config); the caption says
 what was removed.}
+
+\item{sets_ranges}{\code{TRUE} for step 1's wide IGS, whose best-supported runs
+set the narrow ranges (said in the captions).}
 }
 \value{
 Invisibly, a data frame with one row per output: \code{output}, \code{ok},
 \code{message}.
 }
 \description{
-One call per IGS step in the driver. Writes PDFs with the ported plotting
-functions, plus \code{identifiability_summary.csv} and \code{estimates.csv}. A plot that
-fails is reported and skipped; the others are still written.
+One call per IGS step in the driver. Writes one PDF per figure of
+\code{\link[=igs_figures]{igs_figures()}}, plus \code{identifiability_summary.csv}, \code{estimates.csv} and
+\code{condition_number.csv}. A plot that fails is reported and skipped; the
+others are still written.
 }

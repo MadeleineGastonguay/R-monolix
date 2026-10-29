@@ -9,8 +9,6 @@
 
 #' Set scenario tasks and SAEM settings for the loaded project
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
-#'
 #' @param linearize Used only when `scenario` is `NULL`.
 #' @param estimation The `estimation` section of the config (see
 #'   [config_defaults()]); `NULL` uses the defaults.
@@ -46,11 +44,10 @@ set_project_settings <- function(linearize = FALSE, estimation = NULL, scenario 
 
 #' Create a new Monolix project from a model file, data file and statistical model
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R. With a config, use
-#' [setup_project()] instead, which takes everything from a [model_spec()].
+#' With a config, use [setup_project()] instead, which takes everything from a [model_spec()].
 #'
 #' @param distributions Named character vector or list of parameter
-#'   distributions, e.g. `c(ta = "normal")`.
+#'   distributions, e.g. `c(param1 = "normal")`.
 #' @param estimation,scenario Passed to [set_project_settings()].
 #' @export
 create_project <- function(model_file, data_file, 
@@ -113,8 +110,6 @@ create_project <- function(model_file, data_file,
 }
 
 #' Set initial values (and fixed parameters) on the loaded project
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 set_base <- function(initial_values, omega_under_1 = F, fixed = NULL){
   
@@ -130,7 +125,12 @@ set_base <- function(initial_values, omega_under_1 = F, fixed = NULL){
     column_to_rownames("parameter") 
   
   popparams <- lixoftConnectors::getPopulationParameterInformation()
-  popparams$initialValue <- initial_values[popparams$name, "estimate"]
+  # Parameters without a value (e.g. the fixed exponent c of a proportional error model, which
+  # has no estimate) keep the project's own value: an NA here becomes `value=NaN` in the
+  # project, and Monolix then can't parse the model-building files it writes from it.
+  given <- initial_values[popparams$name, "estimate"]
+  keep <- is.na(given) & !grepl("beta_", popparams$name)
+  popparams$initialValue[!keep] <- given[!keep]
   
   # Set values for fixed parameters
   if(!is.null(fixed)){
@@ -148,9 +148,7 @@ set_base <- function(initial_values, omega_under_1 = F, fixed = NULL){
 
 #' Render the HTML report for a Monolix project
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R and generalized: the
-#' groups, labels and rescaling come from the config instead of the SIV study
-#' columns. Needs Monolix ([init_monolix()]) and a project that has been run.
+#' The groups, labels and rescaling come from the config. Needs Monolix ([init_monolix()]) and a project that has been run.
 #'
 #' @param project_file Path to the .mlxtran project.
 #' @param output_file File name of the report, written to the project's

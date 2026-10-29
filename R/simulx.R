@@ -6,8 +6,10 @@
 #' Imports the fitted Monolix project into Simulx and simulates each individual
 #' from their estimated parameters (EBEs, i.e. conditional modes; conditional
 #' means if there are no EBEs) on a fine time grid over their own observed
-#' time range. lixoftConnectors is switched to Simulx and back to Monolix
-#' afterwards (also on error), so any loaded Monolix project is closed.
+#' time range (dose records included). Each individual's doses from the data
+#' are kept (the `mlx_` treatment elements made by importing the project).
+#' lixoftConnectors is switched to Simulx and back to Monolix afterwards (also
+#' on error), so any loaded Monolix project is closed.
 #'
 #' @param project_file Path to a Monolix project that has been run.
 #' @param variables Model variables to simulate. `NULL`: the model's
@@ -60,8 +62,12 @@ simulate_model_variables <- function(project_file, variables = NULL, n_points = 
     lixoftConnectors::defineOutputElement(name = out_elements[i],
                                           element = list(data = grid_file, output = variables[i]))
   }
+  # doses: importProject() makes one mlx_ treatment element per administration type in the data;
+  # set them explicitly so the simulation keeps each individual's doses
+  treatments <- grep("^mlx_", names(tryCatch(lixoftConnectors::getTreatmentElements(), error = function(e) list())),
+                     value = TRUE)
   group <- lixoftConnectors::getGroups()[[1]]$name
-  lixoftConnectors::setGroupElement(group = group, elements = c(indiv, out_elements))
+  lixoftConnectors::setGroupElement(group = group, elements = c(indiv, treatments, out_elements))
   lixoftConnectors::setSamplingMethod("keepOrder")
   lixoftConnectors::setGroupSize(group, length(unique(grid$id)))
   lixoftConnectors::runSimulation()

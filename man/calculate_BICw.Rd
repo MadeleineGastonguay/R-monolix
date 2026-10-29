@@ -7,5 +7,5 @@
 calculate_BICw(tabestimates)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+BICc weights and cumulative probability for each run
 }

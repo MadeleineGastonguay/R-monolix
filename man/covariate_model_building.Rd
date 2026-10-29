@@ -20,7 +20,7 @@ covariate_model_building(
 \arguments{
 \item{scenario}{Optional \code{scenario} section of the config, used when the
 best model's tasks have to be rerun. \code{NULL} runs every task without
-linearization, as the SIV code did.}
+linearization.}
 
 \item{report_config}{Optional config, for the report's grouping and labels.}
 }
@@ -28,8 +28,7 @@ linearization, as the SIV code did.}
 The model-building results (\code{getModelBuildingResults()}), invisibly.
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R. Results go to
-\verb{<project>/ModelBuilding} and \verb{<project>/final_model.mlxtran}, so to run
+Results go to \verb{<project>/ModelBuilding} and \verb{<project>/final_model.mlxtran}, so to run
 both SCM and COSSAC, give each its own \code{projectFile} (e.g. \code{scm.mlxtran}
 and \code{cossac.mlxtran}).
 }

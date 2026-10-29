@@ -32,6 +32,16 @@ test_that("set_base fills only missing treatment effects with 0", {
   expect_equal(out$initialValue[out$name == "beta_p_vac_1"], 0)
 })
 
+test_that("set_base keeps the project's value for parameters it has no value for", {
+  skip_if_not(monolix_available())
+  # like the fixed c of a proportional error model: in the project, not in the estimates
+  iv <- data.frame(parameter = c("lambda_pop", "p_pop", "omega_lambda"), estimate = c(10, 2, 0.5))
+  out <- run_set_base(iv)
+  expect_equal(out$initialValue[out$name == "a"], 1)
+  expect_false(anyNA(out$initialValue))
+  expect_equal(out$initialValue[out$name == "beta_p_vac_1"], 0)
+})
+
 test_that("set_base raises omega initial values below 1 unless told not to", {
   skip_if_not(monolix_available())
   iv <- data.frame(parameter = fake_popparams()$name, estimate = c(10, 2, 0.5, 0.3, 0.1, 0.4))

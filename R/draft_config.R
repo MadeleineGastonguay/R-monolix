@@ -30,7 +30,15 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   obs <- ht$column[ht$type == "observation"]
   covs <- ht$column[ht$type %in% c("catcov", "contcov")]
   catcovs <- ht$column[ht$type == "catcov"]
-  strat <- catcovs[!grepl("^int", catcovs)]
+  # the report colours groups with Dark2 (8 colours): only covariates with at most 8 levels
+  n_levels <- vapply(catcovs, function(cc) length(unique(stats::na.omit(data[[cc]]))), numeric(1))
+  strat <- catcovs[!grepl("^int", catcovs) & n_levels <= 8]
+
+  # examples in the comments use this model's own parameters and covariates
+  p1 <- parsed$parameters[1]
+  p2 <- if (length(parsed$parameters) > 1) parsed$parameters[2] else p1
+  c1 <- if (length(covs)) covs[1] else "cov1"
+  c2 <- if (length(covs) > 1) covs[2] else c1
 
   yaml_dir <- dirname(normalizePath(path, mustWork = FALSE))
   L <- character()
@@ -69,7 +77,7 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   }
   ln("  random_effects_excluded: []", cm(paste0("parameters with no random effect; model parameters: ",
                                                  paste(parsed$parameters, collapse = ", "))))
-  ln("  distributions: {}", cm("e.g. {ta: normal}; default lognormal"))
+  ln("  distributions: {}", cm(paste0("e.g. {", p1, ": normal}; default lognormal")))
   if (length(transforms)) {
     ln("  report_transforms:", cm("how estimates are shown in reports"))
     for (k in names(transforms)) {
@@ -78,10 +86,10 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
          cm(paste0("guessed from `", src$derived, " = ", sub("^x", sub("_pop$", "", k), src$expr), "`, check")))
     }
   } else {
-    ln("  report_transforms: {}", cm("e.g. {NPs_pop: {label: NP_pop, expr: \"x * 10^5\"}}"))
+    ln("  report_transforms: {}", cm(paste0("e.g. {", p1, "_pop: {label: \"", p1, " (units)\", expr: \"x * 10^5\"}}")))
   }
   ln("")
-  ln("estimation:", cm("defaults used in the SIV analysis"))
+  ln("estimation:", cm("Monolix's SAEM settings"))
   ln("  saem: ", flow(d$estimation$saem))
   ln("")
   sc <- d$scenario
@@ -100,15 +108,16 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("  omega_range: ", flow(d$step1_igs$omega_range), cm("wide search, random-effect SDs"))
   ln("  wide_nits: ", yv(d$step1_igs$wide_nits))
   ln("  narrow: ", flow(d$step1_igs$narrow), cm("min_fold_width: e.g. 2 widens ranges to at least [best/2, 2*best]"))
-  ln("  profile_likelihood: {}", cm("run after step 1, e.g. {p_pop: {range: [0.5, 20], n: 10, log10: true}} or {p_pop: {values: [1, 2, 3, 5]}}"))
+  ln("  profile_likelihood: {}", cm(paste0("run after step 1, e.g. {", p1, "_pop: {range: [0.5, 20], n: 10, log10: true}} or {", p1, "_pop: {values: [1, 2, 3, 5]}}")))
   ln("  plots: ", flow(d$step1_igs$plots))
   ln("")
   ln("decisions:", cm("filled in by you at the checkpoints"))
-  ln("  fixed: ~", cm("CHECKPOINT 1: e.g. {lambda_pop: 50, p_pop: 0.7}, or {} to fix none"))
+  ln("  fixed: ~", cm(paste0("CHECKPOINT 1: e.g. {", p1, "_pop: 50", if (p2 != p1) paste0(", ", p2, "_pop: 0.7"), "}, or {} to fix none")))
   ln("  fixed_rationale: ~")
-  ln("  fixed_confirmed: ~", cm("CHECKPOINT 1b (after step 2): true if nothing else needs fixing; set back to ~ when you change fixed"))
+  ln("  random_effects_removed: []", cm(paste0("CHECKPOINT 1 (optional): parameters to drop the random effect of from step 2 on, e.g. [", parsed$parameters[1], "]")))
+  ln("  fixed_confirmed: ~", cm("CHECKPOINT 1b (after step 2): true if nothing else needs fixing or removing; set back to ~ when you change fixed or random_effects_removed"))
   ln("")
-  ln("step2_igs: ", flow(list(nits = d$step2_igs$nits)), cm("skipped when decisions.fixed is {}"))
+  ln("step2_igs: ", flow(list(nits = d$step2_igs$nits)), cm("skipped when decisions.fixed is {} and random_effects_removed is []"))
   ln("")
   s3 <- d$step3_model_building
   ln("step3_model_building:")
@@ -121,12 +130,13 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
     ln("  covariates: all")
   }
   ln("  parameters: all", cm("or a list of parameters to search"))
-  ln("  relationships: ~", cm("or {include: {ta: [vac]}, exclude: {m: [tlr7]}}: pairs in every model / in none"))
+  ln("  relationships: ~", cm(paste0("or {include: {", p1, ": [", c1, "]}, exclude: {", p2, ": [", c2, "]}}: pairs in every model / in none")))
   ln("  use_linearization: ", yv(s3$use_linearization))
   ln("  initial_value_rounding: ", yv(s3$initial_value_rounding), cm("significant figures for _pop initial values"))
   ln("  omega_initial: ", yv(s3$omega_initial))
   ln("  scm_stop_rule_delta_bicc: ", yv(s3$scm_stop_rule_delta_bicc), cm("for the automatic scm_delta2 candidate (criterion BIC only)"))
-  ln("  candidate_models: ~", cm("CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 (SCM; scm_delta2 with BIC only) and cossac_best (COSSAC) are added automatically"))
+  ln("  candidate_models: ~", cm(paste0("CHECKPOINT 2: e.g. {model1: {", p1, ": [", c1, "], ", p2, ": [", c1, "]}}, or {}; ",
+                                        "scm_best and scm_delta2 (SCM; scm_delta2 with BIC only) and cossac_best (COSSAC) are added automatically")))
   ln("")
   s4 <- d$step4_model_comparison
   ln("step4_model_comparison:")
@@ -140,11 +150,11 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("")
   ln("report:")
   if (length(strat)) {
-    ln("  stratify_by: ", flow(strat), cm("guessed: categorical covariates not starting with int, check"))
+    ln("  stratify_by: ", flow(strat), cm("guessed: categorical covariates with at most 8 levels, not starting with int, check"))
   } else {
     ln("  stratify_by: ~")
   }
-  ln("  group_labels: ~", cm("e.g. {\"1.0\": tlr7, \"0.1\": vac}"))
+  ln("  group_labels: ~", cm("names for the groups, e.g. {\"1.0\": treated, \"0.0\": control}"))
 
   writeLines(L, path)
 

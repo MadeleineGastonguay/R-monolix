@@ -29,6 +29,9 @@ step_settings <- function(config, step, before_checkpoint = FALSE) {
   )
   if (step >= 2) {
     out$decisions <- list(fixed = config$decisions$fixed)
+    # recorded only when used, so run logs written before this setting existed still match
+    rm <- removed_random_effects(config)
+    if (length(rm)) out$decisions$random_effects_removed <- as.list(rm)
     out$step2_igs <- config$step2_igs
   }
   if (step >= 3) {
@@ -89,19 +92,10 @@ write_run_log <- function(config, step, dir, extra = list(), before_checkpoint =
 #' @return `TRUE` if a matching log exists, `FALSE` if there is no log yet.
 #' @export
 check_run_log <- function(config, step, dir, before_checkpoint = FALSE) {
-  path <- file.path(dir, "run_log.yaml")
-  if (!file.exists(path)) return(FALSE)
-  log <- yaml::read_yaml(path, handlers = yaml_handlers())
-  then <- c(flatten_settings(log$settings), flatten_settings(list(files = log$files)))
-  # logs written before the profiles became their own step recorded them with step 1
-  then <- then[!startsWith(names(then), "step1_igs.profile_likelihood")]
-  now <- c(flatten_settings(yaml_roundtrip(step_settings(config, step, before_checkpoint))),
-           flatten_settings(list(files = file_hashes(config))))
-  keys <- union(names(then), names(now))
-  differ <- keys[vapply(keys, function(k) !identical(then[[k]], now[[k]]), logical(1))]
-  if (length(differ)) {
-    lines <- vapply(differ, function(k) paste0("  - ", k, ": ", then[[k]] %||% "(not set)", " -> ", now[[k]] %||% "(not set)"), "")
-    stop("The cached results in ", dir, " were made with different settings:\n", paste(lines, collapse = "\n"),
+  changes <- run_log_changes(config, step, dir, before_checkpoint)
+  if (is.null(changes)) return(FALSE)
+  if (length(changes)) {
+    stop("The cached results in ", dir, " were made with different settings:\n", paste0("  - ", changes, collapse = "\n"),
          "\nSet RERUN for this step to TRUE (which overwrites them), or restore the old settings.", call. = FALSE)
   }
   TRUE

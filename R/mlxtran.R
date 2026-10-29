@@ -145,6 +145,13 @@ guess_header_types <- function(data) {
     }
   }
 
+  # dosing columns, by name (they vary within individuals, so they'd otherwise be guessed as ignore)
+  dosing <- c(amt = "amount", amount = "amount", dose = "amount", rate = "rate", tinf = "tinf", evid = "evid",
+              mdv = "mdv", ii = "ii", addl = "addl", ss = "ss", adm = "admid", admid = "admid")
+  for (cc in cols[is.na(type) & lc %in% names(dosing)]) {
+    if (is.numeric(data[[cc]])) { type[cc] <- dosing[[tolower(cc)]]; reason[cc] <- "named like a dosing column" }
+  }
+
   obs <- cols[is.na(type) & lc %in% c("dv", "y", "obs", "observation", "conc", "vl", "lvl", "response")]
   if (length(obs) > 0) {
     type[obs] <- "observation"; reason[obs] <- "named like an observation"
@@ -177,8 +184,8 @@ guess_header_types <- function(data) {
 
 #' Guess report transforms from a parsed structural model
 #'
-#' An input that the model only rescales by a constant (e.g. `NP = NPs*10^5`)
-#' is reported on the rescaled scale: `NPs_pop` is shown as `NP_pop = x * 10^5`.
+#' An input that the model only rescales by a constant (e.g. `P = Ps*10^5`) is
+#' reported on the rescaled scale: `Ps_pop` is shown as `P_pop = x * 10^5`.
 #'
 #' @param parsed Output of [parse_mlxtran()].
 #' @return Named list, one entry per `<param>_pop` with `label` and `expr`.

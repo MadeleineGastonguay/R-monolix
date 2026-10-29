@@ -216,7 +216,7 @@ resolve_candidates <- function(config, searches = list()) {
             paste0(duplicates$dropped, " = ", duplicates$same_as, collapse = "; "))
     all <- all[-dup]
   }
-  if (length(all) < 2) warning("Only ", length(all), " distinct candidate model(s) to compare", call. = FALSE)
+  if (length(all) < 2) message("Only ", length(all), " distinct candidate model; step 4 will run its IGS without a comparison")
   structure(all, duplicates = duplicates)
 }
 
@@ -224,7 +224,9 @@ resolve_candidates <- function(config, searches = list()) {
 #'
 #' `step4_model_comparison.compare` is `all` or a list of candidate names
 #' (checkpoint 2b, decided after step 3's single fits). A name that step 3
-#' dropped as a duplicate stands for the candidate it duplicates.
+#' dropped as a duplicate stands for the candidate it duplicates. One model is
+#' allowed: step 4 then runs its IGS (useful for the final model) without a
+#' comparison.
 #'
 #' @param config Output of [read_analysis_config()].
 #' @param candidates Output of [resolve_candidates()] (step 3's `candidates`).
@@ -234,7 +236,11 @@ step4_models <- function(config, candidates) {
   fitted <- names(candidates)
   cmp <- unlist(config$step4_model_comparison$compare)
   if (is.null(cmp)) stop("step4_model_comparison.compare is not decided yet (checkpoint 2b)", call. = FALSE)
-  if (identical(cmp, "all")) return(fitted)
+  one_model <- function(m) message("Step 4: only one model (", m, "): its IGS runs as usual, with nothing to compare it with")
+  if (identical(cmp, "all")) {
+    if (length(fitted) == 1) one_model(fitted)
+    return(fitted)
+  }
   dup <- attr(candidates, "duplicates")
   if (!is.null(dup) && nrow(dup)) {
     i <- match(cmp, dup$dropped)
@@ -246,7 +252,6 @@ step4_models <- function(config, candidates) {
   unknown <- setdiff(cmp, fitted)
   if (length(unknown)) stop("step4_model_comparison.compare has unknown model(s): ", paste(unknown, collapse = ", "),
                             " (fitted in step 3: ", paste(fitted, collapse = ", "), ")", call. = FALSE)
-  if (length(cmp) < 2) stop("step4_model_comparison.compare names only one distinct model (", cmp,
-                            "); list at least two, or all", call. = FALSE)
+  if (length(cmp) == 1) one_model(cmp)
   cmp
 }

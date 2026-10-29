@@ -13,9 +13,10 @@ correlate_estimates(
   remove_bicc_outliers = FALSE,
   file_addendum = "",
   label_threshold = 0.5,
-  text_color = "black"
+  text_color = "black",
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Heatmap of correlations between estimates across runs
 }

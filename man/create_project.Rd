@@ -21,11 +21,10 @@ create_project(
 }
 \arguments{
 \item{distributions}{Named character vector or list of parameter
-distributions, e.g. \code{c(ta = "normal")}.}
+distributions, e.g. \code{c(param1 = "normal")}.}
 
 \item{estimation, scenario}{Passed to \code{\link[=set_project_settings]{set_project_settings()}}.}
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R. With a config, use
-\code{\link[=setup_project]{setup_project()}} instead, which takes everything from a \code{\link[=model_spec]{model_spec()}}.
+With a config, use \code{\link[=setup_project]{setup_project()}} instead, which takes everything from a \code{\link[=model_spec]{model_spec()}}.
 }

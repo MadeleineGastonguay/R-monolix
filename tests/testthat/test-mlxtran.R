@@ -38,3 +38,24 @@ test_that("guess_header_types falls back on data patterns and flags regressors",
   expect_true(sum(ht == "observation") == 1)
   expect_true("ignore" %in% ht)
 })
+
+test_that("dosing columns are guessed by name, and the report only stratifies by covariates with <= 8 levels", {
+  # shaped like a PK dataset with doses (made-up values)
+  d <- data.frame(ID = rep(1:10, each = 3), TIME = rep(c(0, 2, 12), 10), DOSE = rep(c(25, NA, 3.5), 10),
+                  WEIGHT = rep(seq(0.6, 3.6, length.out = 10), each = 3), APGAR = rep(1:10, each = 3),
+                  SEX = rep(c(0, 1), each = 3, length.out = 30), CONC = rep(c(NA, 17, 20), 10))
+  ht <- setNames(guess_header_types(d)$type, names(d))
+  expect_equal(ht[["DOSE"]], "amount")
+  expect_equal(ht[["CONC"]], "observation")
+  expect_equal(ht[["APGAR"]], "catcov")
+  dir <- withr_tempdir()
+  write.csv(d, file.path(dir, "pk.csv"), row.names = FALSE, na = ".")
+  writeLines(c("[LONGITUDINAL]", "input = {V, k}", "PK:", "Cc = pkmodel(V, k)", "OUTPUT:", "output = Cc"),
+             file.path(dir, "pk_model.txt"))
+  expect_equal(parse_mlxtran(file.path(dir, "pk_model.txt"))[c("parameters", "outputs")], list(parameters = c("V", "k"), outputs = "Cc"))
+  path <- suppressMessages(draft_config(file.path(dir, "pk_model.txt"), file.path(dir, "pk.csv"), name = "pk",
+                                        path = file.path(dir, "analysis.yaml")))
+  txt <- readLines(path)
+  expect_true(any(grepl("^    DOSE: amount", txt)))
+  expect_true(any(grepl("^  stratify_by: \\[SEX\\]|^  stratify_by: SEX", txt)))  # APGAR has 10 levels
+})

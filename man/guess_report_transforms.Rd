@@ -13,6 +13,6 @@ guess_report_transforms(parsed)
 Named list, one entry per \verb{<param>_pop} with \code{label} and \code{expr}.
 }
 \description{
-An input that the model only rescales by a constant (e.g. \code{NP = NPs*10^5})
-is reported on the rescaled scale: \code{NPs_pop} is shown as \code{NP_pop = x * 10^5}.
+An input that the model only rescales by a constant (e.g. \code{P = Ps*10^5}) is
+reported on the rescaled scale: \code{Ps_pop} is shown as \code{P_pop = x * 10^5}.
 }

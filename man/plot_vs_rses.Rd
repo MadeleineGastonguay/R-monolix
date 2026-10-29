@@ -9,9 +9,10 @@ plot_vs_rses(
   out_folder = "",
   project_name = "",
   y = "bicc",
-  file_addendum = NULL
+  file_addendum = NULL,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot RSEs against BICc or another column
 }

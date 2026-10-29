@@ -63,6 +63,7 @@ local_fake_monolix <- function(env, .local_envir = parent.frame()) {
     read_likelihood = function(methods) c(ofv = 1, aic = 2, bic = 3, bicc = 100),
     result_methods = function(linearization = NULL) list(se = "stochasticApproximation", ll = "importanceSampling"),
     generate_report = function(project_file, ...) { log_call("report", project_file); invisible(NULL) },
+    render_igs_figures = function(config, step = 1) { log_call("figures_page", step); invisible(NULL) },
     .env = .local_envir
   )
   testthat::local_mocked_bindings(

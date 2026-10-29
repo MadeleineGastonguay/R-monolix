@@ -21,9 +21,8 @@ Data frame with \code{id}, \code{group_key} and \code{group} (a factor, levels i
 key order).
 }
 \description{
-Replaces the SIV-specific treatment groups (tlr7/vac/ab/nnrti) in the
-report. A group key is the individual's values of \code{stratify_by} joined
-with "." in \code{stratify_by} order, e.g. \code{"1.0"} for \verb{tlr7 = 1, vac = 0}.
+A group key is the individual's values of \code{stratify_by} joined with "."
+in \code{stratify_by} order, e.g. \code{"1.0"} for \verb{cov1 = 1, cov2 = 0}.
 \code{group_labels} (\code{report.group_labels} in the config) names keys; unnamed
-keys are shown as \verb{tlr7=1, vac=0}.
+keys are shown as \verb{cov1=1, cov2=0}.
 }

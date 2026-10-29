@@ -31,6 +31,8 @@ Read it with \code{\link[=read_simulated_variables]{read_simulated_variables()}}
 Imports the fitted Monolix project into Simulx and simulates each individual
 from their estimated parameters (EBEs, i.e. conditional modes; conditional
 means if there are no EBEs) on a fine time grid over their own observed
-time range. lixoftConnectors is switched to Simulx and back to Monolix
-afterwards (also on error), so any loaded Monolix project is closed.
+time range (dose records included). Each individual's doses from the data
+are kept (the \code{mlx_} treatment elements made by importing the project).
+lixoftConnectors is switched to Simulx and back to Monolix afterwards (also
+on error), so any loaded Monolix project is closed.
 }

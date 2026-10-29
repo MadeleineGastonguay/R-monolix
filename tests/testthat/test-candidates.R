@@ -25,14 +25,14 @@ test_that("each method adds its own automatic candidates", {
   expect_equal(candidate_names(cfg_with("none", "{am1: {ta: [vac]}, am2: {NPs: [tlr7]}}")), c("am1", "am2"))
 })
 
-test_that("with method none, at least two hand-written models are needed", {
+test_that("with method none, at least one hand-written model is needed", {
   ok <- cfg_with("none", "{am1: {ta: [vac]}, am2: {NPs: [tlr7]}}", final = "am2")
   expect_equal(problems(ok), "")
-  expect_match(problems(cfg_with("none", "{am1: {ta: [vac]}}", final = "am1")), "at least two models when method is none")
-  expect_match(problems(cfg_with("none", "{}", final = "am1")), "at least two models when method is none")
+  expect_equal(problems(cfg_with("none", "{am1: {ta: [vac]}}", final = "am1")), "")
+  expect_match(problems(cfg_with("none", "{}", final = "am1")), "at least one model when method is none")
   # until candidates are written, it's a checkpoint naming what's needed
   err <- tryCatch(validate_config(cfg_with("none"), 3), pipeline_checkpoint = function(e) conditionMessage(e))
-  expect_match(err, "at least two named treatment-effect models")
+  expect_match(err, "named treatment-effect models for step 4")
   # automatic names don't exist without a search
   expect_match(problems(cfg_with("none", "{am1: {ta: [vac]}, am2: {NPs: [tlr7]}}", "[am1, scm_best]", "am1")),
                "compare has unknown model\\(s\\): scm_best")
@@ -47,10 +47,10 @@ test_that("search settings are only checked when a search runs", {
   expect_match(problems(cfg), "criterion must be BIC")
 })
 
-test_that("cossac_best can be compared and chosen; compare needs two models", {
+test_that("cossac_best can be compared and chosen; compare can name one model", {
   expect_equal(problems(cfg_with("[SCM, COSSAC]", "{}", "[scm_best, cossac_best]", "cossac_best")), "")
   expect_match(problems(cfg_with("COSSAC", "{}", "[scm_best, cossac_best]", "cossac_best")), "unknown model\\(s\\): scm_best")
-  expect_match(problems(cfg_with("SCM", "{}", "[scm_best]", "scm_best")), "at least two models")
+  expect_equal(problems(cfg_with("SCM", "{}", "[scm_best]", "scm_best")), "")
 })
 
 test_that("resolve_candidates combines searches and hand-written models", {
@@ -88,8 +88,11 @@ test_that("step 3 fits every candidate; compare (checkpoint 2b) picks the ones f
   # scm_delta2 was dropped as a duplicate of scm_best: it stands for scm_best
   expect_message(m <- step4_models(cfg_with("SCM", hand, "[scm_delta2, am1]"), cm), "scm_delta2 = scm_best")
   expect_equal(m, c("scm_best", "am1"))
-  expect_error(suppressMessages(step4_models(cfg_with("SCM", hand, "[scm_delta2, scm_best]"), cm)), "only one distinct model")
+  expect_message(m <- step4_models(cfg_with("SCM", hand, "[scm_delta2, scm_best]"), cm), "only one model \\(scm_best\\)")
+  expect_equal(m, "scm_best")
   expect_error(step4_models(cfg_with("SCM", hand, "~"), cm), "checkpoint 2b")
+  expect_message(m <- step4_models(cfg_with("SCM", hand, "all"), cm["scm_best"]), "only one model")
+  expect_equal(m, "scm_best")
 
   # until compare is decided, step 4 is a checkpoint
   err <- tryCatch(validate_config(cfg_with("SCM", hand, "~"), 4, decisions_needed = FALSE),

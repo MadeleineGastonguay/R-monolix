@@ -16,5 +16,5 @@ parameter_plots(
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Combined diagnostic panel for one parameter
 }

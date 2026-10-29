@@ -11,9 +11,10 @@ plot_iv_vs_estimates(
   project_name = "",
   remove_estimate_outliers = FALSE,
   remove_bicc_outliers = FALSE,
-  parameter = NULL
+  parameter = NULL,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot final estimates against initial values
 }

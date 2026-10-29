@@ -46,7 +46,5 @@ fails, the report plots them at the observation times (tables.txt).}
 Path to the report, invisibly.
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R and generalized: the
-groups, labels and rescaling come from the config instead of the SIV study
-columns. Needs Monolix (\code{\link[=init_monolix]{init_monolix()}}) and a project that has been run.
+The groups, labels and rescaling come from the config. Needs Monolix (\code{\link[=init_monolix]{init_monolix()}}) and a project that has been run.
 }

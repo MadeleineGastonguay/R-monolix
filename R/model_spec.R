@@ -10,10 +10,12 @@
 #' @param config Output of [read_analysis_config()], checked with
 #'   [validate_config()].
 #' @param treatment_effects Named list of covariates per parameter, e.g.
-#'   `list(ta = "vac", NPs = c("vac", "intTLR7VAC"))`. `NULL` for no covariates.
-#' @param use_fixed Apply `decisions.fixed`? `FALSE` for step 1.
+#'   `list(param1 = "cov1", param2 = c("cov1", "cov2"))`. `NULL` for no covariates.
+#' @param use_fixed Apply the checkpoint 1 decisions (`decisions.fixed` and
+#'   `decisions.random_effects_removed`)? `FALSE` for step 1.
 #' @return A list with `model_file`, `data_file`, `header_types` (in data column
-#'   order), `error_model`, `exclude_random_effects`, `distributions`,
+#'   order), `error_model`, `exclude_random_effects` (`model.random_effects_excluded`,
+#'   plus `decisions.random_effects_removed` with `use_fixed`), `distributions`,
 #'   `treatment_effects`, `fixed`, `estimation`, `scenario`, `initial_ranges`,
 #'   `omega_range` and `error_initial` (overrides of Monolix's default
 #'   starting values for error-model parameters).
@@ -36,7 +38,8 @@ model_spec <- function(config, treatment_effects = NULL, use_fixed = TRUE) {
     header_types = unname(ht[data_cols]),
     error_model = as.list(unlist(config$model$error_model)),
     error_initial = unlist(config$model$error_initial),
-    exclude_random_effects = nonempty(unlist(config$model$random_effects_excluded)),
+    exclude_random_effects = nonempty(unique(c(unlist(config$model$random_effects_excluded),
+                                               if (use_fixed) removed_random_effects(config)))),
     distributions = nonempty(unlist(config$model$distributions)),
     treatment_effects = nonempty(lapply(treatment_effects, unlist)),
     fixed = if (use_fixed) nonempty(unlist(fixed)) else NULL,

@@ -13,8 +13,8 @@ load_igs_results(path)
 Named list (e.g. \code{tabestimates}, \code{tabiters}, \code{phase}, \code{initialvalues}).
 }
 \description{
-Reads an \code{.RData} file written by the pipeline or by the earlier SIV scripts
-(\code{IGS.RData}, \code{log10_IGS.RData}) and returns its objects as a list, with
+Reads an \code{.RData} file of initial guess sampling results (e.g. \code{IGS.RData},
+\code{log10_IGS.RData}) and returns its objects as a list, with
 column names converted by \code{\link[=standardize_columns]{standardize_columns()}}. The file itself is not
 changed.
 }

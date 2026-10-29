@@ -25,5 +25,5 @@ alt_mod(
 (see \code{\link[=generate_report]{generate_report()}}).}
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Create, fit and report an alternative treatment-effect model
 }

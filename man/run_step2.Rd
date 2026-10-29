@@ -2,7 +2,7 @@
 % Please edit documentation in R/pipeline.R
 \name{run_step2}
 \alias{run_step2}
-\title{Step 2: initial guess sampling with the fixed parameters}
+\title{Step 2: initial guess sampling with the checkpoint 1 decisions applied}
 \usage{
 run_step2(config, rerun = FALSE)
 }
@@ -16,10 +16,14 @@ The IGS result used by step 3 (step 2's, or step 1's narrow IGS),
 with attribute \code{skipped}.
 }
 \description{
-Skipped when \code{decisions.fixed} is \code{{}}: the narrow IGS of step 1 is used
-instead. Otherwise the base model with \code{decisions.fixed} applied, sampled
-over step 1's narrow ranges. Writes diagnostics, the best run's estimates
-and an identifiability summary of the parameters still estimated
+Skipped when \code{decisions.fixed} is \code{{}} and \code{decisions.random_effects_removed}
+is empty (\code{\link[=step2_runs]{step2_runs()}}): the narrow IGS of step 1 is used instead.
+Otherwise the base model with those parameters fixed and those random
+effects removed, sampled over step 1's narrow ranges (the ranges of removed
+random effects are unused). The model keeps the reduced variability from
+here on: steps 3 and 4 and the final model use it too. Writes diagnostics,
+the best run's estimates and an identifiability summary of the parameters
+still estimated
 (\code{\link[=identifiability_summary]{identifiability_summary()}}). Checkpoint 1b (\code{decisions.fixed_confirmed})
-follows: confirm that nothing else needs fixing before step 3.
+follows: confirm that nothing else needs fixing or removing before step 3.
 }

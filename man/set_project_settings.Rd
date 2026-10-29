@@ -16,5 +16,5 @@ set_project_settings(linearize = FALSE, estimation = NULL, scenario = NULL)
 default tasks with \code{linearization = linearize}.}
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Set scenario tasks and SAEM settings for the loaded project
 }

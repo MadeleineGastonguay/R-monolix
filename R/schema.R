@@ -12,10 +12,9 @@ OLD_COLUMN_NAMES <- c(rses = "rse", initialValue = "initial_value", am = "model"
 
 #' Rename old column names to the package's names
 #'
-#' Converts tables produced by the earlier SIV_HIV_rebound_kinetics scripts:
-#' `rses` becomes `rse`, `initialValue` becomes `initial_value` and `am`
+#' Converts tables that use older column names: `rses` becomes `rse`, `initialValue` becomes `initial_value` and `am`
 #' becomes `model`. Old profile likelihood tables stored the profiled value in
-#' a column named after the parameter (e.g. `lambda_pop`); pass that name as
+#' a column named after the parameter (e.g. `param1_pop`); pass that name as
 #' `profiled_parameter` to convert it to `profiled_parameter`/`profiled_value`.
 #'
 #' @param df A data frame.
@@ -49,8 +48,8 @@ standardize_columns <- function(df, profiled_parameter = NULL) {
 
 #' Load saved initial guess sampling results
 #'
-#' Reads an `.RData` file written by the pipeline or by the earlier SIV scripts
-#' (`IGS.RData`, `log10_IGS.RData`) and returns its objects as a list, with
+#' Reads an `.RData` file of initial guess sampling results (e.g. `IGS.RData`,
+#' `log10_IGS.RData`) and returns its objects as a list, with
 #' column names converted by [standardize_columns()]. The file itself is not
 #' changed.
 #'

@@ -114,6 +114,7 @@ test_that("fixed parameters go through step 2 with the fixed values", {
   out <- quietly(run_pipeline(path))
   expect_match(attr(out, "checkpoint"), "decisions.fixed_confirmed")
   expect_length(calls_of(env, "search"), 0)
+  expect_equal(vapply(calls_of(env, "figures_page"), `[[`, numeric(1), "x"), c(1, 2))   # a figures page per IGS step
   s2dir <- file.path(read_analysis_config(path)$analysis$out_folder, "step2_igs")
   summ <- read.csv(file.path(s2dir, "identifiability_summary.csv"))
   expect_false("lambda_pop" %in% summ$parameter)   # fixed, so not summarised
@@ -130,6 +131,36 @@ test_that("fixed parameters go through step 2 with the fixed values", {
   # SCM starts from step 2's best run with lambda fixed
   sb <- calls_of(env, "set_base")[[1]]$x
   expect_equal(sb$estimate[sb$parameter == "lambda_pop"], 50)
+})
+
+test_that("random effects removed at checkpoint 1 are dropped from step 2 on, not from step 1", {
+  skip_if_not(monolix_available())
+  env <- new.env(); local_fake_monolix(env)
+  path <- small_config(list("  fixed: ~" = "  fixed: {}", "  random_effects_removed: []" = "  random_effects_removed: [ta]"))
+  # nothing fixed, but a random effect removed: step 2 runs, then checkpoint 1b
+  out <- quietly(run_pipeline(path))
+  expect_match(attr(out, "checkpoint"), "decisions.fixed_confirmed")
+  setups <- calls_of(env, "setup")
+  expect_length(setups, 2)   # step 1, step 2
+  expect_null(setups[[1]]$x$exclude_random_effects)
+  expect_equal(setups[[2]]$x$exclude_random_effects, "ta")
+  expect_null(setups[[2]]$x$fixed)
+  expect_true(file.exists(file.path(read_analysis_config(path)$analysis$out_folder, "step2_igs", "results.rds")))
+  # after the confirmation, the search and the candidates use the reduced model too
+  set_yaml(path, list("  fixed_confirmed: ~" = "  fixed_confirmed: true"))
+  out <- quietly(run_pipeline(path))
+  expect_match(attr(out, "checkpoint"), "candidate_models")
+  later <- calls_of(env, "setup")[-(1:2)]
+  expect_gt(length(later), 0)
+  for (s in later) expect_equal(s$x$exclude_random_effects, "ta")
+  # changing the removal is a step 2 setting: step 1 is kept; steps 2 and 3 must be rerun
+  set_yaml(path, list("  random_effects_removed: [ta]" = "  random_effects_removed: [ta, m]"))
+  expect_error(quietly(run_pipeline(path)), "random_effects_removed")
+  expect_error(quietly(run_pipeline(path, rerun = 2)), "step3_model_building.*different settings|different settings")
+  n_igs <- length(calls_of(env, "igs"))
+  quietly(run_pipeline(path, rerun = 2:3))
+  expect_equal(length(calls_of(env, "igs")), n_igs + 1)   # step 2 refitted, step 1 not
+  expect_equal(tail(calls_of(env, "setup"), 1)[[1]]$x$exclude_random_effects, c("ta", "m"))
 })
 
 test_that("method none skips the search and compares the hand-written models", {
@@ -260,4 +291,62 @@ test_that("checkpoint 2 warns when scm_delta2 keeps a covariate Monolix removed 
   # once candidate_models is decided, no more warning
   set_yaml(path, list("  candidate_models: ~" = "  candidate_models: {}"))
   expect_no_warning(suppressMessages(run_pipeline(path)))
+})
+
+test_that("history.yaml records every finished step and what each rerun changed", {
+  skip_if_not(monolix_available())
+  env <- new.env(); local_fake_monolix(env)
+  path <- small_config(list("  fixed: ~" = "  fixed: {lambda_pop: 50}"))
+  quietly(run_pipeline(path))   # step 1, step 2, then checkpoint 1b
+  cfg <- read_analysis_config(path)
+  h <- read_history(cfg)
+  expect_equal(vapply(h, `[[`, "", "part"), c("step1_igs", "step2_igs"))
+  expect_null(h[[1]]$replaced)
+  expect_equal(h[[1]]$result$narrow$runs, 5)
+  expect_equal(h[[2]]$decisions$fixed, list(lambda_pop = 50))
+  expect_true(is.numeric(h[[2]]$result$best_bicc))
+
+  # a different fixed value: step 2 is rerun and the history says what changed
+  set_yaml(path, list("  fixed: {lambda_pop: 50}" = "  fixed: {lambda_pop: 60}"))
+  quietly(run_pipeline(path, rerun = 2))
+  h <- read_history(read_analysis_config(path))
+  expect_length(h, 3)
+  expect_equal(h[[3]]$part, "step2_igs")
+  expect_true("decisions.fixed.lambda_pop: 50 -> 60" %in% unlist(h[[3]]$replaced$changed))
+  expect_false(is.null(h[[3]]$replaced$previous_run))
+  expect_equal(h[[3]]$decisions$fixed, list(lambda_pop = 60))
+
+  # loading saved results adds nothing; later parts are recorded with their own names
+  set_yaml(path, list("  fixed_confirmed: ~" = "  fixed_confirmed: true"))
+  quietly(run_pipeline(path))
+  h <- read_history(read_analysis_config(path))
+  expect_equal(vapply(h, `[[`, "", "part")[-(1:3)], "step3_model_building/search")
+  expect_equal(names(h[[4]]$result), "SCM")
+  expect_equal(h[[4]]$decisions$method, "SCM")
+})
+
+test_that("step 4 runs with a single model (its IGS, nothing to compare) and the final model follows", {
+  skip_if_not(monolix_available())
+  env <- new.env(); local_fake_monolix(env)
+  path <- small_config(list("  fixed: ~" = "  fixed: {}", "  candidate_models: ~" = "  candidate_models: {}",
+                            "  compare: ~" = "  compare: all", "  final_model: ~" = "  final_model: scm_best"))
+  out <- quietly(run_pipeline(path))
+  expect_null(attr(out, "checkpoint"))
+  root <- read_analysis_config(path)$analysis$out_folder
+  expect_equal(names(readRDS(file.path(root, "step4_model_comparison", "results.rds"))$igs), "scm_best")
+  expect_true(file.exists(file.path(root, "final_model", "decision.yaml")))
+})
+
+test_that("step 3's candidates can be refitted without redoing the search", {
+  skip_if_not(monolix_available())
+  env <- new.env(); local_fake_monolix(env)
+  path <- small_config(list("  fixed: ~" = "  fixed: {}", "  candidate_models: ~" = "  candidate_models: {}"))
+  quietly(run_pipeline(path))   # through step 3's single fits, then checkpoint 2b
+  expect_length(calls_of(env, "search"), 1)
+  set_yaml(path, list("  candidate_models: {}" = "  candidate_models: {model1: {NPs: [tlr7]}}"))
+  cfg <- read_analysis_config(path)
+  expect_error(quietly(run_step3(cfg)), "candidate_models")
+  out <- quietly(run_step3(cfg, rerun_candidates = TRUE))
+  expect_length(calls_of(env, "search"), 1)   # the search was loaded, not rerun
+  expect_true("model1" %in% out$single_fits$model)
 })

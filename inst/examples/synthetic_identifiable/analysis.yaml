@@ -67,7 +67,8 @@ step1_igs:
 decisions:
   fixed: ~  # CHECKPOINT 1: expected to fix lambda_pop and/or p_pop (true values 100 and 3)
   fixed_rationale: ~
-  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing; set back to ~ when you change fixed
+  random_effects_removed: []  # CHECKPOINT 1 (optional): parameters to drop the random effect of from step 2 on, e.g. [ta]
+  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing or removing; set back to ~ when you change fixed or random_effects_removed
 
 step2_igs: {nits: 20}
 

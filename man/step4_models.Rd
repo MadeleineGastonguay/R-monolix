@@ -17,5 +17,7 @@ Character vector of candidate names, in the order given.
 \description{
 \code{step4_model_comparison.compare} is \code{all} or a list of candidate names
 (checkpoint 2b, decided after step 3's single fits). A name that step 3
-dropped as a duplicate stands for the candidate it duplicates.
+dropped as a duplicate stands for the candidate it duplicates. One model is
+allowed: step 4 then runs its IGS (useful for the final model) without a
+comparison.
 }

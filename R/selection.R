@@ -6,8 +6,6 @@
 # the SIV rule returned no runs when the best run alone carried more than p_threshold).
 
 #' BICc weights and cumulative probability for each run
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 calculate_BICw <- function(tabestimates){
   # Calculate BICc weights 
@@ -24,8 +22,7 @@ calculate_BICw <- function(tabestimates){
 
 #' Narrower initial-value ranges from an initial guess sampling run
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R. The range of each
-#' parameter is the min-max of its estimates over the best-supported runs:
+#' The range of each parameter is the min-max of its estimates over the best-supported runs:
 #' runs whose cumulative BICc weight is within `p_threshold` (the best run is
 #' always kept, even when its own weight is above the threshold), or runs with
 #' BICc at or below `bicc_cutoff`.
@@ -36,7 +33,7 @@ calculate_BICw <- function(tabestimates){
 #'   below this value.
 #' @param min_fold_width `NULL` (default) uses the min-max range as is. A number
 #'   `f > 1` widens each range to at least `[best / f, best * f]` around the best
-#'   run's estimate (positive estimates only). The SIV analysis used `f = 2`.
+#'   run's estimate (positive estimates only).
 #' @return Data frame with `parameter`, `min`, `max`, `best`.
 #' @export
 get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NULL, min_fold_width = NULL){
@@ -68,8 +65,6 @@ get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NU
 }
 
 #' Flag values outside 1.5 IQR
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 outlier_detector <- function(value, upper_only = F){
   if(upper_only){
@@ -82,8 +77,6 @@ outlier_detector <- function(value, upper_only = F){
 }
 
 #' Optionally drop outlier runs or estimates, returning a caption
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 filter_results <- function(tabestimates, remove_estimate_outliers, remove_bicc_outliers){
   
@@ -115,3 +108,35 @@ filter_results <- function(tabestimates, remove_estimate_outliers, remove_bicc_o
   return(list(tabestimates = tabestimates, caption = caption))
 }
 
+
+#' Best-supported runs of an initial guess sampling run
+#'
+#' The runs with the lowest BICc whose BICc weights add up to `p_threshold`
+#' ([calculate_BICw()]); the best run is always included. These are the runs
+#' [get_narrow_ranges()] uses, and the ones the consistency plots show.
+#'
+#' @param tabestimates `tabestimates` from [initial_guess_sampling()].
+#' @param p_threshold Cumulative BICc weight.
+#' @return Run numbers, best first.
+#' @export
+top_runs <- function(tabestimates, p_threshold = 0.95) {
+  bicw <- calculate_BICw(tabestimates)
+  bicw$run[bicw$cumprob <= p_threshold | seq_len(nrow(bicw)) == 1]
+}
+
+# Caption line saying which runs a plot shows
+runs_note <- function(tabestimates, runs = NULL, p_threshold = 0.95, sets_ranges = FALSE) {
+  n_all <- length(unique(tabestimates$run))
+  if (is.null(runs)) return(paste0("All ", n_all, " runs."))
+  paste0("Top ", length(runs), " of ", n_all, " runs: the lowest-BICc runs making up ", signif(100 * p_threshold, 3),
+         "% of the BICc weight", if (sets_ranges) " (these set the narrow ranges)" else "", ".")
+}
+
+# Non-empty caption pieces, one per line, wrapped so they fit narrow figures
+join_caption <- function(..., width = 100) {
+  x <- as.character(unlist(list(...)))
+  x <- unlist(strsplit(x[!is.na(x)], "\n", fixed = TRUE))
+  x <- trimws(x)
+  x <- x[nzchar(x)]
+  if (length(x)) paste(unlist(lapply(x, strwrap, width = width)), collapse = "\n") else NULL
+}

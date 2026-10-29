@@ -7,12 +7,13 @@
 cor_iv_estimates(
   tabestimates,
   initialvalues,
-  out_folder,
-  project_name,
+  out_folder = "",
+  project_name = "",
   remove_estimate_outliers = FALSE,
-  remove_bicc_outliers = FALSE
+  remove_bicc_outliers = FALSE,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Correlation between initial values and final estimates
 }

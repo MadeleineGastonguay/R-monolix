@@ -39,6 +39,12 @@ test_that("identifiability_summary flags weakly identified parameters", {
 })
 
 
+test_that("identifiability_summary takes parameter correlations from the top runs", {
+  # runs 5 and 6 (poor BICc) would make k_pop and v_pop look strongly correlated
+  s <- identifiability_summary(fake_igs())
+  expect_equal(s$max_abs_cor[s$parameter == "k_pop"], 0.5)
+})
+
 test_that("compare_models counts wins, ties within delta and pairwise differences", {
   igs <- list(
     m1 = fake_candidate(c(100, 100, 100, 100), "beta_k_sex_1", p = c(0.001, 0.02, 0.2, 0.0001), cn = c(10, 20, 30, 40)),

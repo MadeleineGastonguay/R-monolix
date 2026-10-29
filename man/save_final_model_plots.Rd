@@ -19,7 +19,7 @@ save_final_model_plots(
 \code{normalized_estimate_boxplots.pdf} and \code{rses_vs_bicc.pdf} to.}
 
 \item{remove_bicc_outliers, remove_estimate_outliers}{Passed to the plots
-that support them (\code{step1_igs.plots} in the config); the plot caption says
+that support them (\code{step1_igs.plots} in the config); the caption says
 what was removed.}
 }
 \value{

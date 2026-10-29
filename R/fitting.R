@@ -10,8 +10,6 @@
 
 #' Fit the loaded project from many sampled initial values
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
-#'
 #' @param predefined_initialvalues Optional table of initial values (columns
 #'   `parameter`, `run`, `initial_value`), e.g. shared across candidate models in
 #'   step 4. When given, each predefined set is fitted exactly once, under its own
@@ -19,8 +17,7 @@
 #'   comparisons only use the runs that succeeded in every model.
 #' @param set_error Named starting values for error-model parameters (see
 #'   [error_starts()]). They are still estimated; only the start is set. If
-#'   `NULL`, error parameters follow `set_variance` or their sampling range, as
-#'   in the SIV code.
+#'   `NULL`, error parameters follow `set_variance` or their sampling range.
 #' @param set_treatment Starting value for every `beta_*` treatment effect.
 #'   Without it, treatment effects start at 0 (they have no sampling range).
 #' @param seed Seed for sampling initial values (`NULL` leaves the RNG alone).
@@ -271,12 +268,10 @@ profile_grid <- function(range, n, log10 = FALSE) {
 
 #' Profile likelihood for one population parameter
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
-#'
 #' Fits the loaded project once per value of `parameter` on a grid of round
 #' numbers over `range` ([profile_grid()]), or on `values`, with `parameter` fixed at that value and everything else estimated.
 #'
-#' @param parameter Population parameter to profile, e.g. `"lambda_pop"`.
+#' @param parameter Population parameter to profile, e.g. `"param1_pop"`.
 #' @param range `c(min, max)` of the grid.
 #' @param igs Initial values: a table with `name`/`initialValue` (or
 #'   `parameter`/`initial_value`), or a table of estimates (`parameter`,
@@ -291,7 +286,7 @@ profile_grid <- function(range, n, log10 = FALSE) {
 #'   (`parameter`, `estimate`, `rse`, `profiled_parameter`, `profiled_value`,
 #'   `ofv`, `aic`, `bic`, `bicc`).
 #' @export
-profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL, record_predictions = F,
+profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig = F, linearize = NULL,
                                log10 = FALSE, values = NULL){
   
   if (is.null(values)) values <- profile_grid(range, nits, log10)
@@ -321,7 +316,6 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
   methods <- result_methods()
   
   tabestimates <- NULL
-  predictions <- NULL
   for(i in 1:nits){
     print(i)
     
@@ -358,24 +352,6 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
       # Combine results
       tabestimates <- rbind(tabestimates, estimates)
       
-      if(record_predictions){
-        vl_pred <- lixoftConnectors::getEstimatedPredictions()$tot  %>% mutate(id = as.character(id)) 
-        EBE <- lixoftConnectors::getEstimatedIndividualParameters(method = "conditionalMode")$conditionalMode  %>% mutate(id = as.character(id))
-        table_pred <- read_delim(file.path(project_results_dir(), "tables.txt")) %>% 
-          select(id, time, contains("mode"))  %>% mutate(id = as.character(id))
-        predictions_temp <- right_join(
-          EBE,
-          left_join(
-            vl_pred, table_pred
-          )
-        ) %>% mutate(profiled_parameter = parameter, profiled_value = value) %>% 
-          select(profiled_parameter, profiled_value, everything())
-        
-        # Combine resuts
-        predictions <- rbind(predictions, predictions_temp)
-      }
-      
-      
       if(use_estimates_as_ig){
         initialValues <- estimates %>% select(name = parameter, initialValue = estimate) %>% 
           mutate(method = "MLE", initialValue = ifelse(grepl("pop", name), initialValue, pmax(initialValue, 1))) 
@@ -387,18 +363,13 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
     
   }
   
-  if(record_predictions){
-    return(list(tabestimates = tabestimates, predictions = predictions))
-  }else{
-    return(tabestimates)
-  }
+  return(tabestimates)
   
 }
 
 #' Run Monolix covariate model building (SCM or COSSAC)
 #'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R. Results go to
-#' `<project>/ModelBuilding` and `<project>/final_model.mlxtran`, so to run
+#' Results go to `<project>/ModelBuilding` and `<project>/final_model.mlxtran`, so to run
 #' both SCM and COSSAC, give each its own `projectFile` (e.g. `scm.mlxtran`
 #' and `cossac.mlxtran`).
 #'
@@ -406,7 +377,7 @@ profile_likelihood <- function(parameter, range, igs, nits, use_estimates_as_ig 
 #' @return The model-building results (`getModelBuildingResults()`), invisibly.
 #' @param scenario Optional `scenario` section of the config, used when the
 #'   best model's tasks have to be rerun. `NULL` runs every task without
-#'   linearization, as the SIV code did.
+#'   linearization.
 #' @export
 covariate_model_building <- function(projectFile, method = "SCM", criteria = "BIC", covariates = "all", 
                                      linearization = FALSE, relationships = NULL, parameters = NULL, lrt_thresold = c(0.05,0.01),
@@ -483,8 +454,6 @@ covariate_model_building <- function(projectFile, method = "SCM", criteria = "BI
 }
 
 #' Create, fit and report an alternative treatment-effect model
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @param report_config Optional config, for the report's grouping and labels
 #'   (see [generate_report()]).
 #' @export

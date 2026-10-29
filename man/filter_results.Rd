@@ -7,5 +7,5 @@
 filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Optionally drop outlier runs or estimates, returning a caption
 }

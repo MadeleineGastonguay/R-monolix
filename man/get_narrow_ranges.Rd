@@ -21,14 +21,13 @@ below this value.}
 
 \item{min_fold_width}{\code{NULL} (default) uses the min-max range as is. A number
 \code{f > 1} widens each range to at least \verb{[best / f, best * f]} around the best
-run's estimate (positive estimates only). The SIV analysis used \code{f = 2}.}
+run's estimate (positive estimates only).}
 }
 \value{
 Data frame with \code{parameter}, \code{min}, \code{max}, \code{best}.
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R. The range of each
-parameter is the min-max of its estimates over the best-supported runs:
+The range of each parameter is the min-max of its estimates over the best-supported runs:
 runs whose cumulative BICc weight is within \code{p_threshold} (the best run is
 always kept, even when its own weight is above the threshold), or runs with
 BICc at or below \code{bicc_cutoff}.

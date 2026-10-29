@@ -4,12 +4,15 @@
 \alias{run_step3}
 \title{Step 3: covariate search and candidate models}
 \usage{
-run_step3(config, rerun = FALSE)
+run_step3(config, rerun = FALSE, rerun_candidates = rerun)
 }
 \arguments{
 \item{config}{Output of \code{\link[=read_analysis_config]{read_analysis_config()}}.}
 
-\item{rerun}{Refit even if saved results exist (deletes them first).}
+\item{rerun}{Refit the covariate search (and so the candidates too).}
+
+\item{rerun_candidates}{Refit only the candidates, keeping the search, e.g.
+after changing \code{candidate_models}.}
 }
 \value{
 List with \code{searches} (model-building results per method),

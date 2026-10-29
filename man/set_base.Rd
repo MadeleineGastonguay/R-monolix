@@ -7,5 +7,5 @@
 set_base(initial_values, omega_under_1 = F, fixed = NULL)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Set initial values (and fixed parameters) on the loaded project
 }

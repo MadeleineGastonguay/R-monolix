@@ -7,5 +7,5 @@
 plot_model_building(mb, ...)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot and summarise the steps of a stepwise covariate search
 }

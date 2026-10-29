@@ -9,7 +9,8 @@
 #'   weight within `p_threshold`, as in [get_narrow_ranges()]);
 #' * correlation between initial value and estimate across runs (an estimate
 #'   that follows its start is not determined by the data);
-#' * the strongest correlation with another parameter's estimate across runs;
+#' * the strongest correlation with another parameter's estimate among the
+#'   best-supported runs;
 #' * RSE of the best run and the median over runs;
 #' * eta shrinkage (conditional mode) of the best run, on the `omega_` rows.
 #'
@@ -37,13 +38,13 @@ identifiability_summary <- function(igs, p_threshold = 0.95, method = "spearman"
   params <- setdiff(unique(te$parameter), fixed)
   te <- te[te$parameter %in% params, ]
 
-  bicw <- calculate_BICw(te)
-  top_runs <- bicw$run[bicw$cumprob <= p_threshold | seq_len(nrow(bicw)) == 1]
+  top_ids <- top_runs(te, p_threshold)
   best_run <- te$run[which.min(te$bicc)]
 
   # estimates as a run x parameter matrix
   wide <- tidyr::pivot_wider(te[, c("run", "parameter", "estimate")], names_from = parameter, values_from = estimate)
   est <- as.matrix(wide[, params, drop = FALSE])
+  est_top <- est[wide$run %in% top_ids, , drop = FALSE]
   safe_cor <- function(x, y) {
     ok <- is.finite(x) & is.finite(y)
     if (sum(ok) < 3 || stats::sd(x[ok]) == 0 || stats::sd(y[ok]) == 0) return(NA_real_)
@@ -52,11 +53,12 @@ identifiability_summary <- function(igs, p_threshold = 0.95, method = "spearman"
 
   rows <- lapply(params, function(p) {
     tp <- te[te$parameter == p, ]
-    top <- tp$estimate[tp$run %in% top_runs]
+    top <- tp$estimate[tp$run %in% top_ids]
     ivp <- iv[iv$parameter == p, c("run", "initial_value")]
     m <- merge(tp[, c("run", "estimate")], ivp, by = "run")
     others <- setdiff(params, p)
-    cors <- vapply(others, function(q) safe_cor(est[, p], est[, q]), numeric(1))
+    # among the best-supported runs: runs stuck in other minima would blur (or make up) correlations
+    cors <- vapply(others, function(q) safe_cor(est_top[, p], est_top[, q]), numeric(1))
     best_other <- if (length(cors) && any(is.finite(cors))) others[which.max(abs(cors))] else NA_character_
     data.frame(
       parameter = p,
@@ -96,7 +98,7 @@ identifiability_summary <- function(igs, p_threshold = 0.95, method = "spearman"
   )
   out$flags <- apply(flags, 1, function(f) paste(f[!is.na(f)], collapse = "; "))
   attr(out, "best_run") <- best_run
-  attr(out, "top_runs") <- top_runs
+  attr(out, "top_runs") <- top_ids
   out
 }
 

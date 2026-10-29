@@ -27,8 +27,7 @@ Without it, treatment effects start at 0 (they have no sampling range).}
 
 \item{set_error}{Named starting values for error-model parameters (see
 \code{\link[=error_starts]{error_starts()}}). They are still estimated; only the start is set. If
-\code{NULL}, error parameters follow \code{set_variance} or their sampling range, as
-in the SIV code.}
+\code{NULL}, error parameters follow \code{set_variance} or their sampling range.}
 
 \item{predefined_initialvalues}{Optional table of initial values (columns
 \code{parameter}, \code{run}, \code{initial_value}), e.g. shared across candidate models in
@@ -39,5 +38,5 @@ comparisons only use the runs that succeeded in every model.}
 \item{seed}{Seed for sampling initial values (\code{NULL} leaves the RNG alone).}
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Fit the loaded project from many sampled initial values
 }

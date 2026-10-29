@@ -7,8 +7,7 @@
 #' Default settings for every key in analysis.yaml
 #'
 #' These are the values used for any key you leave out (or set to `~`, except
-#' for the checkpoint decisions). They are the settings used in the
-#' SIV_HIV_rebound_kinetics analysis.
+#' for the checkpoint decisions).
 #'
 #' @return Nested list with the same layout as analysis.yaml.
 #' @export
@@ -31,7 +30,7 @@ config_defaults <- function() {
       profile_likelihood = list(),
       plots = list(remove_bicc_outliers = FALSE, remove_estimate_outliers = FALSE)
     ),
-    decisions = list(fixed = NULL, fixed_rationale = NULL, fixed_confirmed = NULL),
+    decisions = list(fixed = NULL, fixed_rationale = NULL, random_effects_removed = list(), fixed_confirmed = NULL),
     step2_igs = list(nits = 100),
     step3_model_building = list(
       method = "SCM", criterion = "BIC", lrt_thresholds = list(forward = 0.05, backward = 0.01),
@@ -45,13 +44,29 @@ config_defaults <- function() {
   )
 }
 
+# Random effects removed at checkpoint 1 (applied from step 2 on)
+removed_random_effects <- function(config) unlist(config$decisions$random_effects_removed)
+
+#' Does step 2 run?
+#'
+#' Step 2 refits the base model after checkpoint 1 when anything was fixed
+#' (`decisions.fixed`) or any random effect removed
+#' (`decisions.random_effects_removed`); otherwise step 1's narrow IGS is used.
+#'
+#' @param config Output of [read_analysis_config()].
+#' @return `TRUE` or `FALSE`.
+#' @export
+step2_runs <- function(config) {
+  length(config$decisions$fixed) > 0 || length(removed_random_effects(config)) > 0
+}
+
 # Keys whose values are user-named maps (any keys allowed), not fixed settings
 FREE_MAPS <- c("header_types", "error_model", "error_initial", "distributions", "report_transforms", "initial_ranges",
                "profile_likelihood", "fixed", "candidate_models", "group_labels", "relationships")
 
 # Keys holding text that must never be converted to numbers
 TEXT_KEYS <- c("name", "out_folder", "file", "structural_model", "version", "header_types", "error_model",
-               "distributions", "random_effects_excluded", "method", "criterion", "covariates",
+               "distributions", "random_effects_excluded", "random_effects_removed", "method", "criterion", "covariates",
                "parameters", "fdr_method", "final_model", "fixed_rationale", "final_rationale", "label",
                "expr", "stratify_by", "group_labels", "compare", "candidate_models", "relationships")
 
@@ -195,7 +210,7 @@ coerce_numbers <- function(x, key = "") {
 #' Checks only what is needed up to `up_to_step`, so the file can be filled in
 #' one step at a time. Every problem found is reported together. If the only
 #' thing missing is a checkpoint decision (`decisions.fixed` before step 2,
-#' `decisions.fixed_confirmed` before step 3 when step 2 ran,
+#' `decisions.fixed_confirmed` before step 3 when step 2 ran ([step2_runs()]),
 #' `step3_model_building.candidate_models` before step 3's candidate fits,
 #' `step4_model_comparison.compare` before step 4,
 #' `step4_model_comparison.final_model` before the final model), the error has
@@ -392,7 +407,8 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   if (up_to_step >= 2) {
     fx <- config$decisions$fixed
     if (is.null(fx)) {
-      todo <- c(todo, "decisions.fixed (checkpoint 1): parameters to fix after step 1, as `name_pop: value`, or {} to fix none")
+      todo <- c(todo, paste0("decisions.fixed (checkpoint 1): parameters to fix after step 1, as `name_pop: value`, or {} to fix none ",
+                             "(and decisions.random_effects_removed for random effects to drop)"))
     } else if (length(fx)) {
       fxv <- unlist(fx)
       if (!is.numeric(fxv)) add("decisions.fixed values must be numbers")
@@ -401,17 +417,31 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
         if (length(bad)) add("decisions.fixed has unknown parameter(s): ", paste(bad, collapse = ", "), " (use the _pop names)")
       }
     }
+    rm <- removed_random_effects(config)
+    if (length(rm) && !is.character(rm)) add("decisions.random_effects_removed must be a list of parameter names")
+    if (length(rm) && is.character(rm) && !is.null(params)) {
+      bad <- setdiff(rm, params)
+      if (length(bad)) add("decisions.random_effects_removed has unknown parameter(s): ", paste(bad, collapse = ", "),
+                           " (use the parameter names, e.g. k, not omega_k)")
+      already <- intersect(rm, unlist(config$model$random_effects_excluded))
+      if (length(already)) add("decisions.random_effects_removed: ", paste(already, collapse = ", "),
+                               " already ha", if (length(already) == 1) "s" else "ve", " no random effect (model.random_effects_excluded)")
+      if (!length(setdiff(params, c(rm, unlist(config$model$random_effects_excluded))))) {
+        add("decisions.random_effects_removed leaves no parameter with a random effect; Monolix needs at least one")
+      }
+    }
     if (!is_count(config$step2_igs$nits)) add("step2_igs.nits must be a positive whole number")
   }
 
   # step 3: model building and candidates (checkpoint 2)
   if (up_to_step >= 3) {
     # checkpoint 1b: after step 2, confirm nothing else needs fixing (needed before step 3 starts)
-    if (length(config$decisions$fixed)) {
+    if (step2_runs(config)) {
       fc <- config$decisions$fixed_confirmed
       if (is.null(fc)) {
         todo <- c(todo, paste0("decisions.fixed_confirmed (checkpoint 1b): look at step2_igs/identifiability_summary.csv; ",
-                               "true if no other parameter needs fixing, otherwise add it to decisions.fixed and rerun step 2"))
+                               "true if nothing else needs fixing or removing, otherwise change decisions.fixed or ",
+                               "decisions.random_effects_removed and rerun step 2"))
       } else if (!isTRUE(fc)) {
         add("decisions.fixed_confirmed must be true, or ~ until you've checked step 2")
       }
@@ -445,12 +475,12 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
           paste0("step3_model_building.candidate_models (checkpoint 2): named treatment-effect models, or {} to compare only ",
                  paste(auto, collapse = " and "))
         } else {
-          "step3_model_building.candidate_models: at least two named treatment-effect models to compare (method is none)"
+          "step3_model_building.candidate_models: named treatment-effect models for step 4 (method is none, so there are no automatic ones)"
         })
       }
     } else {
-      if (!is.null(methods) && !searching && length(cm) < 2) {
-        add("step3_model_building.candidate_models needs at least two models when method is none (no covariate search adds any)")
+      if (!is.null(methods) && !searching && length(cm) < 1) {
+        add("step3_model_building.candidate_models needs at least one model when method is none (no covariate search adds any)")
       }
       clash <- intersect(names(cm), AUTO_CANDIDATES)
       if (length(clash)) add("step3_model_building.candidate_models: ", paste(clash, collapse = ", "), " are reserved for the automatic candidates of the covariate searches; pick other names")
@@ -472,12 +502,11 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
     cmp <- unlist(s4$compare)
     if (is.null(cmp)) {
       todo <- c(todo, paste0("step4_model_comparison.compare (checkpoint 2b): look at step3_model_building/candidates/single_fits.csv; ",
-                             "all, or a list of at least two candidates to compare (e.g. [",
+                             "all, or a list of candidates (e.g. [",
                              paste(unique(c(utils::head(candidates, 1), utils::tail(candidates, 1))), collapse = ", "), "])"))
     } else if (!identical(cmp, "all")) {
       if (length(setdiff(cmp, candidates))) add("step4_model_comparison.compare has unknown model(s): ", paste(setdiff(cmp, candidates), collapse = ", "),
                                                 " (candidates: ", paste(candidates, collapse = ", "), ")")
-      if (length(unique(cmp)) < 2) add("step4_model_comparison.compare needs at least two models, or all")
     }
     compared <- if (identical(cmp, "all") || is.null(cmp)) candidates else cmp
     if (!isTRUE(s4$fdr_method %in% stats::p.adjust.methods)) add("step4_model_comparison.fdr_method must be one of ", paste(stats::p.adjust.methods, collapse = ", "))
@@ -522,14 +551,14 @@ check_relationships <- function(rel, params, cov_cols, prm, covs, add) {
   if (!length(rel)) return(invisible())
   key <- "step3_model_building.relationships"
   if (!is.list(rel) || is.null(names(rel)) || length(setdiff(names(rel), c("include", "exclude")))) {
-    add(key, " takes `include` and/or `exclude`, each as `parameter: [covariates]`, e.g. {include: {ta: [vac]}}")
+    add(key, " takes `include` and/or `exclude`, each as `parameter: [covariates]`, e.g. {include: {param1: [cov1]}}")
     return(invisible())
   }
   all_pairs <- list()
   for (k in names(rel)) {
     x <- rel[[k]]
     if (!length(x)) next
-    if (!is.list(x) || is.null(names(x))) { add(key, ".", k, " must be `parameter: [covariates]`, e.g. {ta: [vac]}"); next }
+    if (!is.list(x) || is.null(names(x))) { add(key, ".", k, " must be `parameter: [covariates]`, e.g. {param1: [cov1]}"); next }
     p_bad <- if (!is.null(params)) setdiff(names(x), params) else character()
     if (length(p_bad)) add(key, ".", k, " has unknown parameter(s): ", paste(p_bad, collapse = ", "))
     p_out <- if (!identical(prm, "all")) setdiff(intersect(names(x), params %||% names(x)), prm) else character()

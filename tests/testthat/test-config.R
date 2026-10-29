@@ -86,6 +86,26 @@ test_that("typos, bad values and unknown parameters are all reported together", 
   expect_match(err, "decisions.fixed has unknown parameter\\(s\\): lambda \\(use the _pop names\\)")
 })
 
+test_that("decisions.random_effects_removed is checked and makes step 2 run", {
+  chk <- function(removed, extra = list()) {
+    cfg <- read_analysis_config(make_config(c(list("  fixed: ~" = "  fixed: {}",
+                                                    "  random_effects_removed: []" = paste0("  random_effects_removed: ", removed)), extra)))
+    list(cfg = cfg, err = tryCatch({ validate_config(cfg, 2); "" }, error = function(e) conditionMessage(e)))
+  }
+  ok <- chk("[ta]")
+  expect_equal(ok$err, "")
+  expect_true(step2_runs(ok$cfg))
+  expect_equal(model_spec(ok$cfg)$exclude_random_effects, "ta")
+  expect_null(model_spec(ok$cfg, use_fixed = FALSE)$exclude_random_effects)
+  expect_false(step2_runs(chk("[]")$cfg))
+  expect_match(chk("[omega_ta]")$err, "random_effects_removed has unknown parameter\\(s\\): omega_ta")
+  expect_match(chk("[ta]", list("  random_effects_excluded: []" = "  random_effects_excluded: [ta]"))$err,
+               "ta already has no random effect")
+  expect_match(chk("[lambda, betas, ta, NPs, p, m]")$err, "leaves no parameter with a random effect")
+  # checkpoint 1b is needed before step 3 when step 2 ran
+  expect_error(validate_config(ok$cfg, 3), "fixed_confirmed", class = "pipeline_checkpoint")
+})
+
 test_that("numbers written as 1e-7 are read as numbers, and y/on/no stay text", {
   repl <- list("    betas: {min: 0.001" = "    betas: {min: 1e-7, max: 1e2, log10: true}")
   cfg <- read_analysis_config(make_config(repl))

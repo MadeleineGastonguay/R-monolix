@@ -20,9 +20,10 @@ plot_bicc_v_estimate(
   color = "BICc",
   color_label = NULL,
   point_size = 1,
-  add_best = TRUE
+  add_best = TRUE,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot BICc against each parameter estimate
 }

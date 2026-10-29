@@ -1,4 +1,4 @@
-DESCRIPTION: viral load trajectories, combined model for SHIV SIV datasets
+DESCRIPTION: viral load trajectories, two-regime model with a delay
 
 [LONGITUDINAL]
 

@@ -34,7 +34,8 @@ checkpoint 1 to decide which parameters to fix:
 weight within \code{p_threshold}, as in \code{\link[=get_narrow_ranges]{get_narrow_ranges()}});
 \item correlation between initial value and estimate across runs (an estimate
 that follows its start is not determined by the data);
-\item the strongest correlation with another parameter's estimate across runs;
+\item the strongest correlation with another parameter's estimate among the
+best-supported runs;
 \item RSE of the best run and the median over runs;
 \item eta shrinkage (conditional mode) of the best run, on the \code{omega_} rows.
 }

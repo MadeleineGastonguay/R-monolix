@@ -11,13 +11,15 @@ model_spec(config, treatment_effects = NULL, use_fixed = TRUE)
 \code{\link[=validate_config]{validate_config()}}.}
 
 \item{treatment_effects}{Named list of covariates per parameter, e.g.
-\code{list(ta = "vac", NPs = c("vac", "intTLR7VAC"))}. \code{NULL} for no covariates.}
+\code{list(param1 = "cov1", param2 = c("cov1", "cov2"))}. \code{NULL} for no covariates.}
 
-\item{use_fixed}{Apply \code{decisions.fixed}? \code{FALSE} for step 1.}
+\item{use_fixed}{Apply the checkpoint 1 decisions (\code{decisions.fixed} and
+\code{decisions.random_effects_removed})? \code{FALSE} for step 1.}
 }
 \value{
 A list with \code{model_file}, \code{data_file}, \code{header_types} (in data column
-order), \code{error_model}, \code{exclude_random_effects}, \code{distributions},
+order), \code{error_model}, \code{exclude_random_effects} (\code{model.random_effects_excluded},
+plus \code{decisions.random_effects_removed} with \code{use_fixed}), \code{distributions},
 \code{treatment_effects}, \code{fixed}, \code{estimation}, \code{scenario}, \code{initial_ranges},
 \code{omega_range} and \code{error_initial} (overrides of Monolix's default
 starting values for error-model parameters).

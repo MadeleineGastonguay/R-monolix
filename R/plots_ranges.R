@@ -34,10 +34,9 @@ plot_parameter_ranges <- function(wide_ranges, wide_estimates, narrow_ranges = N
                          range = "Narrow: initial values"))
   final <- wide_estimates
   if (!is.null(narrow_estimates)) {
-    top <- calculate_BICw(narrow_estimates)
-    top_runs <- top$run[top$cumprob <= p_threshold | seq_len(nrow(top)) == 1]
+    top_ids <- top_runs(narrow_estimates, p_threshold)
     df <- rbind(df, span(narrow_estimates, "Narrow: estimates"),
-                span(narrow_estimates[narrow_estimates$run %in% top_runs, ], "Narrow: best-supported runs"))
+                span(narrow_estimates[narrow_estimates$run %in% top_ids, ], "Narrow: best-supported runs"))
     final <- narrow_estimates
   }
   best <- best_run_estimates(final)[, c("parameter", "estimate")]

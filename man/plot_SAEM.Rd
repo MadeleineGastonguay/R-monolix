@@ -12,9 +12,10 @@ plot_SAEM(
   project_name = "",
   remove_bicc_outliers = FALSE,
   filter = NULL,
-  parameter = NULL
+  parameter = NULL,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot SAEM trajectories for each run
 }

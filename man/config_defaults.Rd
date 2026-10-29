@@ -11,6 +11,5 @@ Nested list with the same layout as analysis.yaml.
 }
 \description{
 These are the values used for any key you leave out (or set to \code{~}, except
-for the checkpoint decisions). They are the settings used in the
-SIV_HIV_rebound_kinetics analysis.
+for the checkpoint decisions).
 }

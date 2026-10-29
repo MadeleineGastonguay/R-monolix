@@ -10,9 +10,10 @@ estimate_boxplots(
   remove_estimate_outliers = F,
   out_folder = "",
   project_name = "",
-  file_addendum = NULL
+  file_addendum = NULL,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Boxplots of estimates normalized to their median
 }

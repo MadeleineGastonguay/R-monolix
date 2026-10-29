@@ -3,8 +3,6 @@
 # and lixoftConnectors:: prefixes.
 
 #' Plot and summarise the steps of a stepwise covariate search
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_model_building <- function(mb,  ...){
   mb_summary <- mb %>% 

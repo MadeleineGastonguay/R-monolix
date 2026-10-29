@@ -9,8 +9,10 @@
 #   step1_igs/           wide.mlxtran, narrow.mlxtran (+ their Monolix folders), wide/ and
 #                        narrow/ diagnostics, narrow_ranges.csv, identifiability_summary.csv,
 #                        parameter_ranges.pdf, profile_likelihood/ (run_profiles(): profile.mlxtran,
-#                        <parameter>.csv, profile_summary.csv, profile_likelihood.pdf, run log)
-#   step2_igs/           fixed.mlxtran, diagnostics/, best_estimates.csv, identifiability_summary.csv
+#                        <parameter>.csv, profile_summary.csv, profile_likelihood.pdf, run log),
+#                        igs_figures.html (every figure on one page)
+#   step2_igs/           fixed.mlxtran, diagnostics/, best_estimates.csv, identifiability_summary.csv,
+#                        igs_figures.html
 #   step3_model_building/search/      <method>.mlxtran per covariate search, results tables
 #   step3_model_building/candidates/  <candidate>.mlxtran (scm_best and cossac_best copied from
 #                                     the search's final model), candidates.yaml, single_fits.csv
@@ -18,6 +20,7 @@
 #   final_model/         final_model.mlxtran and its report, decision.yaml, paired_SAEM_population_estimates.pdf,
 #                        normalized_estimate_boxplots.pdf,
 #                        rses_vs_bicc.pdf (from the final model's step 4 runs)
+#   history.yaml         one entry per finished step (read_history())
 #
 # R seeds: wide IGS r_seed, narrow r_seed + 1, step 2 r_seed + 2, step 4 r_seed + 4, so the
 # draws of different steps aren't the same uniform numbers.
@@ -76,6 +79,8 @@ run_pipeline <- function(config_path = "analysis.yaml", rerun = NULL) {
 # TRUE = results can be loaded; FALSE = run the step. Stops if saved results don't match.
 use_cached <- function(config, step, dir, rerun, before_checkpoint = FALSE) {
   if (rerun) {
+    changes <- run_log_changes(config, step, dir, before_checkpoint)
+    if (!is.null(changes)) note_replaced(dir, changes)   # for history.yaml
     if (dir.exists(dir)) unlink(dir, recursive = TRUE)
   } else if (check_run_log(config, step, dir, before_checkpoint)) {
     if (file.exists(file.path(dir, "results.rds"))) {
@@ -93,6 +98,7 @@ use_cached <- function(config, step, dir, rerun, before_checkpoint = FALSE) {
 save_step <- function(results, config, step, dir, before_checkpoint = FALSE) {
   saveRDS(results, file.path(dir, "results.rds"))
   write_run_log(config, step, dir, before_checkpoint = before_checkpoint)
+  record_history(config, dir, step, results)
   invisible(results)
 }
 
@@ -120,11 +126,11 @@ run_igs <- function(ranges, nits, seed, set_error, set_variance = NULL, set_trea
                          record_condition_number = TRUE)
 }
 
-diagnostics <- function(config, igs, dir) {
+diagnostics <- function(config, igs, dir, sets_ranges = FALSE) {
   pl <- config$step1_igs$plots
   save_igs_diagnostics(igs, dir, p_threshold = config$step1_igs$narrow$p_threshold,
                        remove_bicc_outliers = isTRUE(pl$remove_bicc_outliers),
-                       remove_estimate_outliers = isTRUE(pl$remove_estimate_outliers))
+                       remove_estimate_outliers = isTRUE(pl$remove_estimate_outliers), sets_ranges = sets_ranges)
 }
 
 #' Step 1: two-phase initial guess sampling
@@ -158,7 +164,7 @@ run_step1 <- function(config, rerun = FALSE) {
   message("Step 1: wide initial guess sampling (", s1$wide_nits, " runs)")
   wide <- run_igs(ranges, s1$wide_nits, seed, set_error = starts)
   save_project_as(file.path(dir, "wide.mlxtran"))
-  diagnostics(config, wide, file.path(dir, "wide"))
+  diagnostics(config, wide, file.path(dir, "wide"), sets_ranges = TRUE)
 
   narrow_ranges <- get_narrow_ranges(wide$tabestimates, p_threshold = s1$narrow$p_threshold,
                                      min_fold_width = s1$narrow$min_fold_width)
@@ -180,8 +186,10 @@ run_step1 <- function(config, rerun = FALSE) {
                   width = 12, height = 6),
            error = function(e) message("Could not write parameter_ranges.pdf: ", conditionMessage(e)))
 
-  save_step(list(wide = wide, narrow = narrow, narrow_ranges = narrow_ranges, identifiability = identifiability,
-                 sampling_ranges = ranges), config, 1, dir)
+  out <- save_step(list(wide = wide, narrow = narrow, narrow_ranges = narrow_ranges, identifiability = identifiability,
+                        sampling_ranges = ranges), config, 1, dir)
+  figures_page(config, 1)
+  out
 }
 
 #' Profile likelihoods after step 1
@@ -237,6 +245,7 @@ run_profiles <- function(config, step1 = NULL, rerun = FALSE) {
   for (p in setdiff(names(settings), todo)) message("Profile likelihood for ", p, ": loading saved results")
 
   best <- best_run_estimates(step1$narrow$tabestimates)
+  fitted <- character()
   if (length(todo)) {
     lixoftConnectors::loadProject(normalizePath(file.path(pipeline_paths(config)$step1, "narrow.mlxtran")))
     save_project_as(file.path(dir, "profile.mlxtran"))  # a copy, so the narrow project keeps its results
@@ -250,6 +259,7 @@ run_profiles <- function(config, step1 = NULL, rerun = FALSE) {
       if (is.null(pr) || !nrow(pr)) { warning("No profile likelihood fit for ", p, " succeeded", call. = FALSE); next }
       utils::write.csv(pr, file.path(dir, paste0(p, ".csv")), row.names = FALSE)
       done[[p]] <- pl
+      fitted <- c(fitted, p)
       # after every parameter, so an interrupted run keeps the finished ones
       write_run_log(config, 1, dir, extra = list(profile_likelihood = done))
     }
@@ -262,6 +272,14 @@ run_profiles <- function(config, step1 = NULL, rerun = FALSE) {
   if (!length(profiles)) return(invisible(profiles))
   summary <- profile_summary(profiles, n_values = vapply(settings[have], function(pl) as.numeric(length(pl$values)), 1))
   utils::write.csv(summary, file.path(dir, "profile_summary.csv"), row.names = FALSE)
+  if (length(fitted)) {
+    record_history(config, dir, "profiles",
+                   decisions = list(profile_likelihood = lapply(settings[fitted], function(pl) list(values = pl$values))),
+                   result = lapply(split(summary[summary$profiled_parameter %in% fitted, , drop = FALSE],
+                                         summary$profiled_parameter[summary$profiled_parameter %in% fitted]),
+                                   function(r) as.list(r[1, setdiff(names(r), "profiled_parameter"), drop = FALSE])))
+    figures_page(config, 1)   # adds the profiles to step 1's page
+  }
   log10 <- names(settings)[vapply(settings, function(pl) pl$log10, logical(1))]
   tryCatch(ggsave(file.path(dir, "profile_likelihood.pdf"),
                   plot_profile_likelihood(profiles, log10 = log10, best = stats::setNames(best$estimate, best$parameter)),
@@ -284,14 +302,18 @@ profile_initial_values <- function(config, best, info) {
   data.frame(name = pp, initialValue = unname(v), method = "MLE", stringsAsFactors = FALSE)
 }
 
-#' Step 2: initial guess sampling with the fixed parameters
+#' Step 2: initial guess sampling with the checkpoint 1 decisions applied
 #'
-#' Skipped when `decisions.fixed` is `{}`: the narrow IGS of step 1 is used
-#' instead. Otherwise the base model with `decisions.fixed` applied, sampled
-#' over step 1's narrow ranges. Writes diagnostics, the best run's estimates
-#' and an identifiability summary of the parameters still estimated
+#' Skipped when `decisions.fixed` is `{}` and `decisions.random_effects_removed`
+#' is empty ([step2_runs()]): the narrow IGS of step 1 is used instead.
+#' Otherwise the base model with those parameters fixed and those random
+#' effects removed, sampled over step 1's narrow ranges (the ranges of removed
+#' random effects are unused). The model keeps the reduced variability from
+#' here on: steps 3 and 4 and the final model use it too. Writes diagnostics,
+#' the best run's estimates and an identifiability summary of the parameters
+#' still estimated
 #' ([identifiability_summary()]). Checkpoint 1b (`decisions.fixed_confirmed`)
-#' follows: confirm that nothing else needs fixing before step 3.
+#' follows: confirm that nothing else needs fixing or removing before step 3.
 #'
 #' @inheritParams run_step1
 #' @return The IGS result used by step 3 (step 2's, or step 1's narrow IGS),
@@ -300,8 +322,8 @@ profile_initial_values <- function(config, best, info) {
 run_step2 <- function(config, rerun = FALSE) {
   validate_config(config, 2)
   step1 <- run_step1(config)
-  if (!length(config$decisions$fixed)) {
-    message("Step 2: skipped (decisions.fixed is {}); using step 1's narrow IGS")
+  if (!step2_runs(config)) {
+    message("Step 2: skipped (nothing fixed or removed at checkpoint 1); using step 1's narrow IGS")
     return(structure(step1$narrow, skipped = TRUE))
   }
   dir <- pipeline_paths(config)$step2
@@ -312,8 +334,10 @@ run_step2 <- function(config, rerun = FALSE) {
   save_project_as(file.path(dir, "fixed.mlxtran"))
   pp <- lixoftConnectors::getPopulationParameterInformation()$name
   ranges <- ranges_from_narrow(step1$narrow_ranges, attr(step1$sampling_ranges, "log10"))
-  message("Step 2: initial guess sampling with ", paste(names(spec$fixed), collapse = ", "), " fixed (",
-          config$step2_igs$nits, " runs)")
+  rm <- removed_random_effects(config)
+  changes <- c(if (length(spec$fixed)) paste(paste(names(spec$fixed), collapse = ", "), "fixed"),
+               if (length(rm)) paste("no random effect on", paste(rm, collapse = ", ")))
+  message("Step 2: initial guess sampling with ", paste(changes, collapse = " and "), " (", config$step2_igs$nits, " runs)")
   igs <- run_igs(ranges, config$step2_igs$nits, config$analysis$r_seed + 2, set_error = error_starts(spec, pp),
                  set_variance = config$step1_igs$narrow$omega_initial, fixed = spec$fixed)
   save_project_as(file.path(dir, "fixed.mlxtran"))
@@ -321,7 +345,9 @@ run_step2 <- function(config, rerun = FALSE) {
   utils::write.csv(best_run_estimates(igs$tabestimates), file.path(dir, "best_estimates.csv"), row.names = FALSE)
   utils::write.csv(identifiability_summary(igs, p_threshold = config$step1_igs$narrow$p_threshold),
                    file.path(dir, "identifiability_summary.csv"), row.names = FALSE)
-  save_step(structure(igs, skipped = FALSE), config, 2, dir)
+  out <- save_step(structure(igs, skipped = FALSE), config, 2, dir)
+  figures_page(config, 2)
+  out
 }
 
 # Base model (fixed parameters applied) or a candidate, started from step 2's best run
@@ -345,13 +371,16 @@ setup_from_best <- function(config, treatment_effects, initial_values, file) {
 #' model, which was already fitted with the analysis scenario.
 #'
 #' @inheritParams run_step1
+#' @param rerun Refit the covariate search (and so the candidates too).
+#' @param rerun_candidates Refit only the candidates, keeping the search, e.g.
+#'   after changing `candidate_models`.
 #' @return List with `searches` (model-building results per method),
 #'   `candidates` (covariate models), `initial_values` and `single_fits`
 #'   (each candidate's single fit: BICc, condition number of the correlation
 #'   matrix of the estimates, a note naming treatment effects with Wald
 #'   p >= 0.05, and whether it was fitted or copied).
 #' @export
-run_step3 <- function(config, rerun = FALSE) {
+run_step3 <- function(config, rerun = FALSE, rerun_candidates = rerun) {
   validate_config(config, 3, decisions_needed = FALSE)
   base <- run_step2(config)
   paths <- pipeline_paths(config)
@@ -392,7 +421,7 @@ run_step3 <- function(config, rerun = FALSE) {
   }
   validate_config(config, 3)
   cdir <- paths$step3_candidates
-  if (use_cached(config, 3, cdir, rerun)) return(readRDS(file.path(cdir, "results.rds")))
+  if (use_cached(config, 3, cdir, isTRUE(rerun) || isTRUE(rerun_candidates))) return(readRDS(file.path(cdir, "results.rds")))
   candidates <- resolve_candidates(config, searches)
   writeLines(as_yaml_text(list(candidates = unclass(candidates)[names(candidates)],
                                duplicates = attr(candidates, "duplicates"))),
@@ -548,7 +577,11 @@ run_final_model <- function(config, rerun = FALSE) {
   final <- config$step4_model_comparison$final_model
   dir <- pipeline_paths(config)$final
   file <- file.path(dir, "final_model.mlxtran")
-  if (rerun && dir.exists(dir)) unlink(dir, recursive = TRUE)
+  if (rerun && dir.exists(dir)) {
+    old <- tryCatch(yaml::read_yaml(file.path(dir, "decision.yaml")), error = function(e) NULL)
+    if (!is.null(old)) note_replaced(dir, if (!identical(old$final_model, final)) paste0("final_model: ", old$final_model, " -> ", final))
+    unlink(dir, recursive = TRUE)
+  }
   # plots of the final model's step 4 runs: quick and without Monolix, so redrawn every time
   pl <- config$step1_igs$plots
   save_final_model_plots(step4$igs[[final]]$tabestimates, dir, remove_bicc_outliers = isTRUE(pl$remove_bicc_outliers),
@@ -567,5 +600,6 @@ run_final_model <- function(config, rerun = FALSE) {
                                best_run = step4$comparison$summary[step4$comparison$summary$model == final, ])),
              file.path(dir, "decision.yaml"))
   generate_report(file, config = config, title = paste0(config$analysis$name, ": final model (", final, ")"))
+  record_history(config, dir, "final")
   invisible(file)
 }

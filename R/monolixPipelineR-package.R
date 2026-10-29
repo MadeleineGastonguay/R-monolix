@@ -7,10 +7,11 @@
 #' @keywords internal
 #' @import dplyr tidyr ggplot2 purrr tibble stringr readr forcats patchwork
 #' @importFrom ggbeeswarm geom_beeswarm
-#' @importFrom gridExtra grid.arrange
+#' @importFrom gridExtra arrangeGrob
 #' @importFrom tune coord_obs_pred
 #' @importFrom ggpmisc use_label stat_correlation
 #' @importFrom rlang sym
+#' @importFrom gt gt
 #' @importFrom stats IQR quantile cor cor.test median sd runif setNames
 "_PACKAGE"
 
@@ -22,5 +23,6 @@ utils::globalVariables(c(
   "range", "step", "color", "parameter1", "parameter2", "pval", "CV", "y",
   "id", "time", "method", "initial_value", "rse", "profiled_parameter",
   "profiled_value", "delta_ofv", "initialValue", "model", "is_best", "within_delta", "best_model", "best_bicc",
-  "status", "p_adjusted", "prediction", "group", "popPred", "condition_number"
+  "status", "p_adjusted", "prediction", "group", "popPred", "condition_number",
+  "observation", "delta_bicc"
 ))

@@ -7,5 +7,5 @@
 fill_bicc(...)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Viridis fill scale for BICc
 }

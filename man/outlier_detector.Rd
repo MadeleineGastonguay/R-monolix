@@ -7,5 +7,5 @@
 outlier_detector(value, upper_only = F)
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Flag values outside 1.5 IQR
 }

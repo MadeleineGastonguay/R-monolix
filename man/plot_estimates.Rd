@@ -9,9 +9,10 @@ plot_estimates(
   out_folder = "",
   project_name = "",
   remove_bicc_outliers = FALSE,
-  parameter = NULL
+  parameter = NULL,
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Plot estimates and RSEs for each run
 }

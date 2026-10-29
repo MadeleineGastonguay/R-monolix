@@ -11,9 +11,10 @@ compare_estimates(
   pop_only = TRUE,
   remove_estimate_outliers = FALSE,
   remove_bicc_outliers = FALSE,
-  file_addendum = ""
+  file_addendum = "",
+  note = NULL
 )
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
+Pairs plot of population estimates across runs
 }

@@ -11,13 +11,12 @@ profile_likelihood(
   nits,
   use_estimates_as_ig = F,
   linearize = NULL,
-  record_predictions = F,
   log10 = FALSE,
   values = NULL
 )
 }
 \arguments{
-\item{parameter}{Population parameter to profile, e.g. \code{"lambda_pop"}.}
+\item{parameter}{Population parameter to profile, e.g. \code{"param1_pop"}.}
 
 \item{range}{\code{c(min, max)} of the grid.}
 
@@ -41,9 +40,6 @@ Table with one row per grid value and estimated parameter
 \code{ofv}, \code{aic}, \code{bic}, \code{bicc}).
 }
 \description{
-Ported from the SIV_HIV_rebound_kinetics functions.R.
-}
-\details{
 Fits the loaded project once per value of \code{parameter} on a grid of round
 numbers over \code{range} (\code{\link[=profile_grid]{profile_grid()}}), or on \code{values}, with \code{parameter} fixed at that value and everything else estimated.
 }

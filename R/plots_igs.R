@@ -9,14 +9,12 @@
 # without a standard error (with a caption), uses darker oranges and the usual parameter order.
 
 #' Plot BICc against each parameter estimate
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "", narrow = TRUE,
                                  remove_bicc_outliers = FALSE, remove_estimate_outliers = FALSE, log10_x = TRUE, 
                                  exclude_treatment_effects = FALSE, ylim = NULL,
                                  file_addendum = "",  parameter = NULL, BICc_threshold = NULL,
-                                 color = "BICc", color_label = NULL, point_size = 1, add_best = TRUE){
+                                 color = "BICc", color_label = NULL, point_size = 1, add_best = TRUE, note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   
@@ -55,9 +53,12 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
       # mutate(param = factor(param, levels = popparams$name)) %>%
       ggplot_report(aes(estimate, bicc,  fill = color)) +
       geom_point(alpha = 0.75, shape = 21, size =  point_size + 1) +
-      geom_hline(yintercept = BICc_threshold, lty = "dashed", alpha = 0.5) + 
-      labs(caption = paste0("Dashed line indicates BICc below which fall the most probable models\n", caption))
+      geom_hline(yintercept = BICc_threshold, lty = "dashed", alpha = 0.5)
   }
+  caption <- join_caption(note,
+                          if (!narrow && !is.null(BICc_threshold)) "Dashed line: BICc at or below which the top runs fall.",
+                          if (narrow && add_best) "Triangle: best run (lowest BICc).",
+                          if (any(color == "BICc")) "Colour: BICc.", caption)
   estimates_vs_bicc <- estimates_vs_bicc + 
     facet_wrap(~param, scales = "free_x") + 
     labs(x = "Final estimate", y = "BICc", shape = "Best fit", 
@@ -75,7 +76,7 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
   
   
   if(any(grepl("beta_", tabestimates$param))) estimates_vs_bicc <- estimates_vs_bicc + labs(subtitle = ifelse(!exclude_treatment_effects, "", "treatment effects excluded"))
-  if(!is.null(ylim)) estimates_vs_bicc <- estimates_vs_bicc + ylim(ylim) + labs(caption = paste0(caption, "\nBICc greater than ", max(ylim), " removed"))
+  if(!is.null(ylim)) estimates_vs_bicc <- estimates_vs_bicc + ylim(ylim) + labs(caption = join_caption(caption, paste0("BICc greater than ", max(ylim), " removed")))
   if(!is.null(parameter)){
     if(!grepl("beta_", parameter) & log10_x) estimates_vs_bicc <- estimates_vs_bicc + scale_x_log10()
   # }else if(log10_x & exclude_treatment_effects){ 
@@ -99,18 +100,17 @@ plot_bicc_v_estimate <- function(tabestimates, out_folder = "", project_name = "
 }
 
 #' Compare initial value and final estimate distributions
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_distributions <- function(initialvalues, tabestimates, out_folder = "", project_name = "", parameter_set = "pop",
                                remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
-                               save = T, parameter = NULL){
+                               save = T, parameter = NULL, note = NULL){
   
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  caption <- filtered_results$caption
+  caption <- join_caption(note, paste("Violins and boxes: distribution across runs; points: runs, coloured by BICc;",
+                                      "triangle: best run (lowest BICc)."), filtered_results$caption)
   
   subtitles <- c("pop" = "Population parameters",
                  "omega" = "Standard deviations of the random effect",
@@ -174,17 +174,15 @@ plot_distributions <- function(initialvalues, tabestimates, out_folder = "", pro
 }
 
 #' Plot final estimates against initial values
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
                                  remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
-                                 parameter = NULL){
+                                 parameter = NULL, note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  caption <- filtered_results$caption
+  caption <- join_caption(note, "Each point is a run; triangle: best run (lowest BICc). Colour: BICc.", filtered_results$caption)
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
@@ -217,7 +215,7 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
       scale_shape_manual(values = c(21, 24)) &
       scale_fill_viridis_c(direction = -1, limits = color_limit)
     
-    plot <- grid.arrange(patchworkGrob(plot), left = "Final Estimate", bottom = "Initial Value")
+    plot <- arrangeGrob(patchworkGrob(plot), left = "Final Estimate", bottom = "Initial Value")  # built, not drawn
   }else{
     color_limit <- range(df$bicc)
     
@@ -227,7 +225,7 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
       geom_point(size = 2, alpha = 0.75) + 
       geom_point(data = . %>% filter(bicc == min(bicc)), size = 2) + 
       coord_obs_pred() +
-      labs(color = "BICc", y = "Final Estimate", x = "Initial Value", shape = "Best fit") + 
+      labs(color = "BICc", y = "Final Estimate", x = "Initial Value", shape = "Best fit", caption = caption) + 
       theme(plot.title = element_text(hjust = 0.5)) +
       scale_shape_manual(values = c(21, 24)) + 
       scale_fill_viridis_c(direction = -1, , limits = color_limit) + 
@@ -244,16 +242,16 @@ plot_iv_vs_estimates <- function(tabestimates, initialvalues, out_folder = "", p
 }
 
 #' Correlation between initial values and final estimates
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
-cor_iv_estimates <- function(tabestimates, initialvalues, out_folder, project_name,
-                             remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE){
+cor_iv_estimates <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
+                             remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   
   tabestimates <- filtered_results$tabestimates
-  caption <- filtered_results$caption
+  caption <- join_caption(note, paste("Pearson correlation across runs between each parameter's initial value and its final",
+                                      "estimate; triangles: p <= 0.05. Parameters that start at the same value in every run",
+                                      "are left out."), filtered_results$caption)
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
@@ -285,17 +283,16 @@ cor_iv_estimates <- function(tabestimates, initialvalues, out_folder, project_na
 }
 
 #' Heatmap of correlations between estimates across runs
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 correlate_estimates <- function(tabestimates, method = "spearman", out_folder = "", project_name = "",
                                 remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE,  file_addendum = "",
-                                label_threshold = 0.5, text_color = "black"){
+                                label_threshold = 0.5, text_color = "black", note = NULL){
   
   # Filter tabestimates to remove estimate outliers and/or BICc outliers
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  caption <- filtered_results$caption
+  caption <- join_caption(note, paste0(str_to_title(method), " correlation of the final estimates across runs; labelled where |r| >= ",
+                                       label_threshold, "."), filtered_results$caption)
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
@@ -329,15 +326,16 @@ correlate_estimates <- function(tabestimates, method = "spearman", out_folder = 
 }
 
 #' Pairs plot of population estimates across runs
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 compare_estimates <- function(tabestimates, out_folder = "", project_name = "", pop_only = TRUE,
-                              remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, file_addendum = ""){
+                              remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, file_addendum = "",
+                              note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  caption <- filtered_results$caption
+  caption <- join_caption(note, paste("Each point is a run; triangle: best run (lowest BICc). Colour: BICc.",
+                                      "Diagonal: distribution of each estimate; upper panels: correlations."),
+                          filtered_results$caption)
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
@@ -352,7 +350,7 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
   
   plot <- df %>% 
     pivot_wider(names_from = param, values_from = estimate) %>% 
-    GGally::ggpairs(columns = 3:ncol(.), 
+    GGally::ggpairs(columns = 3:ncol(.), legend = c(2, 1), 
                     lower = list(continuous = function(data, mapping){
                       ggplot_report(data, mapping) + 
                         geom_point(aes(fill = bicc, shape = bicc == min(bicc)), alpha = 0.75) + 
@@ -375,16 +373,15 @@ compare_estimates <- function(tabestimates, out_folder = "", project_name = "", 
 }
 
 #' Coefficient of variation of initial values and final estimates
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name = "",
                     remove_estimate_outliers = FALSE, remove_bicc_outliers = FALSE, 
-                    parameter = NULL){
+                    parameter = NULL, note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers)
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  caption <- filtered_results$caption
+  caption <- join_caption(note, "CV = SD / mean across the runs shown, of the initial values and of the final estimates.",
+                          filtered_results$caption)
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
@@ -417,22 +414,24 @@ calc_CV <- function(tabestimates, initialvalues, out_folder = "", project_name =
 }
 
 #' Plot SAEM trajectories for each run
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_name = "",
-                      remove_bicc_outliers = FALSE, filter = NULL, parameter = NULL){
+                      remove_bicc_outliers = FALSE, filter = NULL, parameter = NULL, note = NULL){
   
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers = F, remove_bicc_outliers)
   
   tabestimates <- filtered_results$tabestimates %>% rename(param = parameter)
-  # caption <- filtered_results$caption
+  caption <- join_caption(note, paste("Each line is one run's SAEM iterations, shifted so that 0 (dashed line) is the",
+                                      "switch from the exploratory to the smoothing phase. Solid line: final estimate",
+                                      "of the best run (lowest BICc). Colour: BICc."), filtered_results$caption)
+  xlab <- "Iteration (0 = switch to the smoothing phase)"
   
   popparams <- parameter_info(tabestimates)  # order and fixed status without a loaded project
   
   
   if(is.null(parameter)){
+    lims <- range(tabestimates$bicc)
     plotList <- list()
     i <- 1
     for (param in c(popparams$name, "convergenceIndicator")) {
@@ -451,19 +450,20 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
       plotList[[i]] <- temp %>% 
         ggplot_report( aes(x = iteration-phase, y = !!sym(param))) +
         geom_line(aes(group = run, color = bicc)) +
-        theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
-        # geom_vline(xintercept = changePhase, color = 1:length(changePhase)) +
-        labs(title = param, x = NULL, y = NULL) + 
+        theme(plot.title = element_text(hjust = .5)) +
+        labs(title = param, x = xlab, y = NULL, color = "BICc") + 
         # scale_y_log10() + 
         # coord_cartesian(xlim = c(-200, 314)) + 
         geom_vline(xintercept = 0, lty = "dashed", color = "black") + 
         geom_hline(yintercept = tabestimates %>% filter(bicc == min(bicc), param == p) %>% pull(estimate),
                    alpha = 0.5) + 
-        scale_color_viridis_c(direction = -1) 
+        scale_color_viridis_c(direction = -1, limits = lims)
       i <- i + 1
     }
     
-    plot <- grid.arrange(grobs = plotList, ncol = 5)
+    plot <- wrap_plots(plotList, ncol = min(5, length(plotList))) +
+      plot_layout(guides = "collect", axis_titles = "collect") +
+      plot_annotation(caption = caption)
   }else{
     
     
@@ -478,8 +478,8 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
     plot <- temp %>% 
       ggplot_report( aes(x = iteration-phase, y = !!sym(parameter))) +
       geom_line(aes(group = run, color = bicc)) +
-      theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
-      labs( x = "Iteration - phase switch", y = "Estimate") + 
+      theme(plot.title = element_text(hjust = .5)) +
+      labs(x = xlab, y = "Estimate", color = "BICc", caption = caption) + 
       geom_vline(xintercept = 0, lty = "dashed", color = "black") + 
       geom_hline(yintercept = tabestimates %>% filter(bicc == min(bicc), param == parameter) %>% pull(estimate),
                  alpha = 0.5) + 
@@ -502,11 +502,9 @@ plot_SAEM <- function(tabiters, phase, tabestimates, out_folder = "", project_na
 }
 
 #' Plot estimates and RSEs for each run
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
-                           remove_bicc_outliers = FALSE, parameter = NULL){
+                           remove_bicc_outliers = FALSE, parameter = NULL, note = NULL){
   
   filtered_results <- filter_results(tabestimates, remove_estimate_outliers = F, remove_bicc_outliers)
   
@@ -522,29 +520,31 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
     summarise(lower = min(lower), upper = max(upper)) %>% 
     column_to_rownames("param")
   
+  explanation <- paste("Points: each run's final estimate; error bars: +/- RSE. Solid line: estimate of the best run",
+                       "(lowest BICc); dashed line: median across the runs shown. Colour: BICc.")
   if(is.null(parameter)){
-    # plot population parameters
+    # plot population parameters, one panel each, with one BICc legend
+    lims <- range(tabestimates$bicc)
     plotList <- list()
-    i <- 1
     for (param in popparams$name) {
       if (popparams[popparams$name == param, ]$method == "FIXED") next
       estimates <- tabestimates[tabestimates$param == param, ]
-      plotList[[i]] <- ggplot_report(estimates %>% filter(run %in% unique(tabestimates$run)), 
-                              aes(x = run, y = estimate, color = bicc)) +
+      plotList[[param]] <- ggplot_report(estimates, aes(x = run, y = estimate, color = bicc)) +
         geom_point() +
         geom_errorbar(aes(ymax = estimate * (1+as.numeric(rse)/100), 
                           ymin = estimate * (1-as.numeric(rse)/100))) +
-        theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
-        labs(title = param, x = NULL, y = NULL) +
+        theme(plot.title = element_text(hjust = .5)) +
+        labs(title = param, x = "Run", y = NULL, color = "BICc") +
         geom_hline(yintercept = estimates %>% filter(bicc == min(bicc)) %>% pull(estimate),
                    alpha = 0.5) + 
         geom_hline(yintercept = estimates %>% pull(estimate) %>% median(),
                    alpha = 0.5, lty = "dashed") + 
-        scale_color_viridis_c(direction = -1) 
-      i <- i + 1
+        scale_color_viridis_c(direction = -1, limits = lims)
     }
     
-    plot <- grid.arrange(grobs = plotList, ncol = 5)
+    plot <- wrap_plots(plotList, ncol = min(5, length(plotList))) +
+      plot_layout(guides = "collect", axis_titles = "collect") +
+      plot_annotation(caption = join_caption(note, explanation, filtered_results$caption))
   }else{
     estimates <- tabestimates[tabestimates$param == parameter, ]
     plot <- ggplot_report(estimates %>% filter(run %in% unique(tabestimates$run)), 
@@ -553,7 +553,7 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
       geom_errorbar(aes(ymax = estimate * (1+as.numeric(rse)/100), 
                         ymin = estimate * (1-as.numeric(rse)/100))) +
       theme(legend.position = "none", plot.title = element_text(hjust = .5)) +
-      labs(x = NULL, y = "Final Estimate") +
+      labs(x = "Run", y = "Final Estimate", caption = join_caption(note, explanation, filtered_results$caption)) +
       geom_hline(yintercept = estimates %>% filter(bicc == min(bicc)) %>% pull(estimate), alpha = 0.5) + 
       geom_hline(yintercept = estimates %>% pull(estimate) %>% median(),
                  alpha = 0.5, lty = "dashed") +
@@ -578,11 +578,9 @@ plot_estimates <- function(tabestimates, out_folder = "", project_name = "",
 }
 
 #' Boxplots of estimates normalized to their median
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_estimate_outliers = F, 
-                              out_folder = "", project_name = "", file_addendum = NULL){
+                              out_folder = "", project_name = "", file_addendum = NULL, note = NULL){
   
   results_filtered <- filter_results(tabestimates, remove_estimate_outliers, remove_bicc_outliers )
   tabestimates <- results_filtered$tabestimates
@@ -600,21 +598,17 @@ estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_est
   breaks <- breaks[breaks <= bound]
   breaks <- sort(round(unique(c(1/breaks, breaks, bound, 1/bound)), 2))
   
-  parameters <- unique(df$parameter)
-  
+  # Monolix's order: _pop, omegas, correlations, covariate effects, then error-model parameters
   plot <- df %>% 
-    mutate(parameter = factor(parameter, 
-                              levels = c(parameters[grepl("pop", parameters)],
-                                         parameters[grepl("omega", parameters)],
-                                         parameters[grepl("beta_", parameters)],
-                                         parameters[ parameters == "a"]))) %>% 
+    mutate(parameter = factor(parameter, levels = parameter_levels(df))) %>% 
     ggplot_report(aes(factor(parameter), estimate)) + 
     geom_boxplot() + 
     geom_text(data = CV, aes(y = Inf, label = CV), vjust = 1) +
     scale_y_log10(breaks = breaks, limits = range(breaks)) + 
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = "Parameter", y = "Normalized Estimate", subtitle = "Numbers at the top: CV (%) across runs",
-         caption = results_filtered$caption) 
+    labs(x = "Parameter", y = "Normalized Estimate",
+         caption = join_caption(note, paste("Each estimate divided by its median across the runs shown;",
+                                            "numbers at the top: CV (%) across those runs."), results_filtered$caption)) 
   
   
   if(out_folder != ""){
@@ -627,8 +621,6 @@ estimate_boxplots <- function(tabestimates, remove_bicc_outliers = F, remove_est
 }
 
 #' Combined diagnostic panel for one parameter
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 parameter_plots <- function(parameter, remove_bicc_outliers, remove_estimate_outliers,
                             log10_tabestimates, tabestimates, tabiters,
@@ -768,10 +760,8 @@ parameter_plots <- function(parameter, remove_bicc_outliers, remove_estimate_out
 }
 
 #' Plot RSEs against BICc or another column
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
-plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = "bicc", file_addendum = NULL){
+plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = "bicc", file_addendum = NULL, note = NULL){
   names(tabestimates)[names(tabestimates) == y] <- "y"
   scales <- ifelse(y == "bicc", "free_x", "free")
   
@@ -785,7 +775,7 @@ plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = 
     scale_x_log10() + 
     facet_wrap(~parameter, scales = scales) + 
     labs(x = "RSE (%)", y = if (y == "bicc") "BICc" else y, color = "RSE (%)",
-         caption = if (n_missing) paste0(n_missing, " estimate(s) without a standard error left out") else NULL) +
+         caption = join_caption(note, if (n_missing) paste0(n_missing, " estimate(s) without a standard error left out"))) +
     # the darker half of Oranges, so every group shows on white
     scale_color_manual(values = stats::setNames(c("#FDAE6B", "#E6550D", "#7F2704"), groups), drop = FALSE)
   
@@ -799,14 +789,10 @@ plot_vs_rses <- function(tabestimates, out_folder = "", project_name = "",  y = 
 }
 
 #' Viridis colour scale for BICc
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 color_bicc <- function(...) scale_color_viridis_c("BICc", direction = -1, ...)
 
 #' Viridis fill scale for BICc
-#'
-#' Ported from the SIV_HIV_rebound_kinetics functions.R.
 #' @export
 fill_bicc <- function(...) scale_fill_viridis_c("BICc", direction = -1, ...)
 
