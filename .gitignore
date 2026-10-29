@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.DS_Store
+
+# Step 8 pipeline runs (results and logs; not committed)
+dev/step8/

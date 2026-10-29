@@ -1,0 +1,124 @@
+DESCRIPTION: viral load trajectories, two-regime model with a delay
+
+[LONGITUDINAL]
+
+input = {lambda,betas,ta,NPs,p,m}
+
+EQUATION:
+; Fixed parameters
+NP=NPs*10^5
+beta=betas*10^(-7)
+dT=0.05
+dI=0.4
+dP=0.001
+dE=1
+c=23
+k=50000
+NE=10000
+F=0.9
+tw=3
+I1=4*10^(-5)
+rho=10
+N=3
+tauQ=1
+
+; Variable values during ART
+T_art=lambda/dT
+I_art=I1/(ta*dI)
+V_art=I_art*k/c
+if (dP>p*(1-F)*V_art/(V_art+NP))
+   P_art=m/(dP-p*(1-F)*V_art/(V_art+NP))
+else 
+   P_art=1000*NE
+end
+E_art=p*F*P_art*V_art/(dE*(V_art+NP)) 
+
+; Composite parameters
+R0=lambda*beta*k/((1+E_art/NE)*dT*dI*c)*exp(-dT*tauQ) ; basic reproductive rate
+
+; solve for early exponential growth rate using an approximation to the Lambert W in the positive upper branch (from Golicnik, Euro J Drug Met. & Pk, 2011)
+x_lamW1 = R0*tauQ*(dI*c/(dI + c))*exp(tauQ*dI*c/(dI + c))
+lamW_x1 = 1.45869*log(1.2*x_lamW1/log(2.4*x_lamW1/log(1 + 2.4*x_lamW1))) - 0.45869*log(2*x_lamW1/log(1 + 2*x_lamW1))
+R = 1/tauQ*lamW_x1 - dI*c/(dI + c)
+
+; solve for survival probability using an approximation to the Lambert W in the negative upper branch (from Golicnik, Euro J Drug Met. & Pk, 2011)
+if (R0>1)
+   x_lamW=-R0*exp(-R0)
+   N2=3*sqrt(2)+6-sqrt(2*(1+exp(1)*x_lamW))*((2237+1457*sqrt(2))*exp(1)-4108*sqrt(2)-5764)/((215+199*sqrt(2))*exp(1)-430*sqrt(2)-796)
+   N1=(1-1/sqrt(2))*(N2+sqrt(2))
+   LamW_x=-1+sqrt(2*(1+exp(1)* x_lamW))/(1+(N1*sqrt(2*(1+exp(1)* x_lamW)))/(N2+sqrt(2*(1+exp(1)*    x_lamW))))
+   p_surv=(LamW_x+R0)/(R0+rho-1)*exp(dT*tauQ)
+else 
+   p_surv=0
+end
+
+; get effective a value
+if (R0>1)
+   aeff=I1*R/(p_surv*(exp(R*ta/p_surv)-1))
+else 
+   aeff=I1/ta
+end
+
+
+; effective weight of non-zero initial condition (interpolation function)
+if (R0>1)
+   w=2^(-(ta*dI/p_surv)^N)
+else
+   w=0
+end
+
+; time to start numerically integrating ODE, to avoid numerical errors
+if (R0>1)
+  if(ta > 200)
+    ; If ta is too big, exp(R*ta/p_surv) will be infinite, causing t_go to be NaN
+    ; This results in immediate numeric integration, which is the opposite of the desired behavior
+    ; Thus, we set t_go to its value when ta = 200 for larger ta values
+    t_go = 200/p_surv-log(w*p_surv*(exp(R* 200/p_surv)-1)/(200*dI)+1)/R
+  else
+    t_go=max(0,ta/p_surv-log(w*p_surv*(exp(R*ta/p_surv)-1)/(ta*dI)+1)/R)
+  end
+else 
+   t_go=0
+end
+
+; Calculate initial condition for I as an intermediate variable since it requires ifelse
+if (R0>1)
+   I_0t=max(w*I_art,I1/p_surv)
+else
+   I_0t=I_art
+end
+
+
+t0 = 0  ; t0 is a reserved keyword (initiation of therapy)
+
+; Initial conditions
+T_0 = T_art
+I_0 = I_0t
+V_0 = I_0*(k/c)
+P_0 = P_art
+E_0 = E_art
+if (t<tw+t_go)
+   cond=0
+else 
+   cond=1
+end
+
+
+; Assume that free virus is proportional to infected cells
+V = k/c*I
+
+; differential equations
+ddt_T = cond*(lambda-beta*T*V-dT*T)
+ddt_I = cond*(aeff+beta*delay(T,tauQ)*k/c*delay(I,tauQ)*exp(-dT*tauQ)/(1+E/NE)-dI*I)
+ddt_P = cond*(m+p*(1-F)*V*P/(V+NP)-dP*P)
+ddt_E = cond*(p*F*V*P/(V+NP)-dE*E)
+
+if (t>0)
+ tot=log(V)/log(10)
+else
+   tot=log(V_0)/log(10)
+end
+
+OUTPUT:
+output = {tot}
+table = {T, V, E, I, P}

@@ -1,0 +1,15 @@
+"parameter","value"
+"lambda_pop",100
+"betas_pop",7
+"ta_pop",4
+"NPs_pop",10
+"p_pop",3
+"m_pop",100
+"omega_lambda",0.3
+"omega_betas",0.3
+"omega_ta",0.3
+"omega_NPs",0.3
+"omega_p",0.3
+"omega_m",0.3
+"beta_ta_vac_1",0.693147180559945
+"a",0.3

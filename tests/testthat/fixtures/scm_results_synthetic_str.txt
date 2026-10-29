@@ -1,0 +1,89 @@
+List of 8
+ $ :List of 5
+  ..$ BICc            : num 179
+  ..$ LL              : num 132
+  ..$ tested          : chr [1:2] "" ""
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 181
+  ..$ LL              : num 132
+  ..$ tested          : chr [1:2] "ta" "tlr7"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE TRUE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 167
+  ..$ LL              : num 117
+  ..$ tested          : chr [1:2] "ta" "vac"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE TRUE
+  ..$ bestModel       : logi TRUE
+ $ :List of 5
+  ..$ BICc            : num 182
+  ..$ LL              : num 132
+  ..$ tested          : chr [1:2] "NPs" "tlr7"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] TRUE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 181
+  ..$ LL              : num 132
+  ..$ tested          : chr [1:2] "NPs" "vac"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] TRUE FALSE FALSE FALSE FALSE FALSE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 169
+  ..$ LL              : num 117
+  ..$ tested          : chr [1:2] "ta" "tlr7"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE TRUE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE TRUE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 167
+  ..$ LL              : num 116
+  ..$ tested          : chr [1:2] "NPs" "tlr7"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] TRUE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] FALSE FALSE FALSE FALSE FALSE TRUE
+  ..$ bestModel       : logi FALSE
+ $ :List of 5
+  ..$ BICc            : num 170
+  ..$ LL              : num 118
+  ..$ tested          : chr [1:2] "NPs" "vac"
+  ..$ individualModels:'data.frame':	6 obs. of  5 variables:
+  .. ..$ intTLR7STUD: logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ intTLR7VAC : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ study      : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ tlr7       : logi [1:6] FALSE FALSE FALSE FALSE FALSE FALSE
+  .. ..$ vac        : logi [1:6] TRUE FALSE FALSE FALSE FALSE TRUE
+  ..$ bestModel       : logi FALSE

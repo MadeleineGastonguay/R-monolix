@@ -1,0 +1,101 @@
+# Example analysis.yaml on the synthetic viral-load data in this folder (made up; see
+# tests/testthat/fixtures/make_synthetic_data.R). Drafted with draft_config(), then filled in.
+# The run counts, SAEM iterations and covariate search are kept small so the example runs in
+# minutes; a real analysis would use the defaults (100 runs per IGS, SAEM 50/1000/500).
+#
+# To run it: copy this folder somewhere, copy inst/scripts/run_pipeline.R next to it, and
+# source the script. It stops at each checkpoint; the decisions below are left as ~.
+# Keys you leave out use the defaults from config_defaults().
+# `~` means not set or not decided yet; `{}` means none.
+
+analysis:
+  name: synthetic_example
+  out_folder: results/synthetic_example  # relative to this file; default results/<name>
+  r_seed: 1  # seed for sampling initial values (the Monolix seed is fixed)
+
+monolix:
+  version: ~  # optional, e.g. "2024R1"; the install path comes from the MONOLIX_PATH environment variable
+
+data:
+  file: synthetic_vl_data.txt
+  header_types:
+    id: id
+    time: time
+    vl: observation
+    censor: cens
+    tlr7: catcov
+    vac: catcov
+    study: catcov
+    intTLR7VAC: catcov
+    intTLR7STUD: catcov
+
+model:
+  structural_model: 2regime_model_delay.txt
+  error_model:  # constant, proportional, combined1 or combined2
+    vl: constant
+  error_initial: {}  # starting values for error-model parameters, which are still estimated; default Monolix's: a = 1, b = 0.3, c = 1
+  random_effects_excluded: []  # parameters with no random effect; model parameters: lambda, betas, ta, NPs, p, m
+  distributions: {}  # e.g. {ta: normal}; default lognormal
+  report_transforms:  # how estimates are shown in reports
+    NPs_pop: {label: NP_pop, expr: x * 10^5}  # from `NP = NPs * 10^5` in the model
+    betas_pop: {label: beta_pop, expr: x * 10^(-7)}  # from `beta = betas * 10^(-7)` in the model
+
+estimation:  # Monolix's SAEM settings
+  saem: {burn_in: 20, exploratory: 300, smoothing: 100, smoothing_alpha: 0.7, exploratory_autostop: true, smoothing_autostop: true}
+
+scenario:  # Monolix tasks run for every fit
+  population_parameters: true  # required
+  conditional_mode: true  # required: individual estimates used by the pipeline
+  conditional_distribution: true  # conditional mean and its shrinkage
+  standard_errors: true  # false: RSEs and condition numbers are NA
+  log_likelihood: true  # required: BICc ranks runs and models
+  linearization: false  # standard errors and likelihood; false = stochastic approximation + importance sampling
+  plots: false
+
+step1_igs:  # convergence assessment without covariates
+  initial_ranges:  # plausible min/max for each parameter; range_around(x) gives [x/100, 100x]
+    lambda: {min: 10, max: 1000, log10: true}
+    betas: {min: 0.001, max: 100, log10: true}
+    ta: {min: 0.01, max: 10, log10: true}
+    NPs: {min: 0.001, max: 100, log10: true}
+    p: {min: 0.01, max: 10, log10: true}
+    m: {min: 0.01, max: 100, log10: true}
+  omega_range: [1, 5]  # wide search, random-effect SDs
+  wide_nits: 20
+  narrow: {nits: 20, p_threshold: 0.95, min_fold_width: ~, omega_initial: 1}  # min_fold_width: e.g. 2 widens ranges to at least [best/2, 2*best]
+  profile_likelihood: {}  # run after step 1, e.g. {lambda_pop: {range: [20, 1000], n: 15, log10: true}}
+  plots: {remove_bicc_outliers: false, remove_estimate_outliers: false}
+
+decisions:  # filled in by you at the checkpoints
+  fixed: ~  # CHECKPOINT 1: e.g. {lambda_pop: 50, p_pop: 0.7}, or {} to fix none
+  fixed_rationale: ~
+  random_effects_removed: []  # CHECKPOINT 1 (optional): parameters to drop the random effect of from step 2 on, e.g. [ta]
+  fixed_confirmed: ~  # CHECKPOINT 1b (after step 2): true if nothing else needs fixing or removing; set back to ~ when you change fixed or random_effects_removed
+
+step2_igs: {nits: 20}  # skipped when decisions.fixed is {} and random_effects_removed is []
+
+step3_model_building:
+  method: SCM  # SCM, COSSAC, [SCM, COSSAC] to run and compare both, or none to compare only candidate_models
+  criterion: BIC  # Monolix's name for BICc; or LRT
+  lrt_thresholds: {forward: 0.05, backward: 0.01}  # only used with LRT
+  covariates: [tlr7, vac]  # kept small for the example; default all covariate columns
+  parameters: [ta, NPs]  # kept small for the example; default all
+  relationships: ~  # or {include: {ta: [vac]}, exclude: {NPs: [tlr7]}}: pairs in every model / in none
+  use_linearization: false
+  initial_value_rounding: 1  # significant figures for _pop initial values
+  omega_initial: 1
+  scm_stop_rule_delta_bicc: 2  # for the automatic scm_delta2 candidate (criterion BIC only)
+  candidate_models: ~  # CHECKPOINT 2: e.g. {am1: {ta: [vac], NPs: [vac]}}, or {}; scm_best and scm_delta2 (SCM; scm_delta2 with BIC only) and cossac_best (COSSAC) are added automatically
+
+step4_model_comparison:
+  nits: 10
+  compare: ~  # CHECKPOINT 2b (after step 3's single fits): all, or a list of candidates to compare
+  omega_initial: 1
+  treatment_initial: 0
+  fdr_method: fdr
+  final_model: ~  # CHECKPOINT 3
+  final_rationale: ~
+
+report:
+  stratify_by: [tlr7, vac]
+  group_labels: ~  # e.g. {"1.0": tlr7, "0.1": vac}

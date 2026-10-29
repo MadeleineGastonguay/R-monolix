@@ -1,0 +1,566 @@
+---
+title: "`r params$title`"
+output:
+  html_document:
+     toc: true
+     toc_float: true
+     toc_depth: 2
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+params:
+  project: ""
+  title: "Monolix report"
+  stratify_by: null
+  group_labels: null
+  report_transforms: null
+---
+
+```{r setup, include=FALSE}
+# Rendered by generate_report() in an environment whose parent is the monolixPipelineR
+# namespace, so package helpers (report_groups(), read_shrinkage(), ...) and its imports
+# (dplyr, tidyr, ggplot2, ...) are available. Monolix must be initialized (init_monolix()).
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(gt)
+library(GGally)
+library(lixoftConnectors)
+# Monolix's own plots (plotVpc(), ...) use the global theme
+theme_set(theme_classic() +
+            theme(panel.grid.major = element_line(),
+                  panel.grid.minor = element_line(),
+                  strip.background = element_blank()))
+# The report's own plots use the package's theme_report() (groups coloured with Dark2)
+
+# Show a Monolix plot or table, or a note when it isn't available for this project
+# (e.g. no censored data for the BLQ check), instead of failing the whole report
+show_or_note <- function(expr) {
+  tryCatch(expr, error = function(e) cat("Not available for this project:", conditionMessage(e), "\n"))
+}
+gt_signif <- function(df, digits = 2) gt(mutate(df, across(where(is.numeric), ~ signif(.x, digits))))
+```
+
+# Project Details
+## Project Setup {.tabset}
+
+```{r}
+loaded <- loadProject(projectFile = params$project)
+if (isFALSE(loaded)) stop("Monolix could not load ", params$project)
+# Monolix's tests; a test it couldn't run comes back empty (e.g. correlations between random
+# effects when only one parameter has one), so keep only tables with rows
+stat_tests <- Filter(Negate(is.null), lapply(getTests(), usable_table))
+methods <- result_methods(getScenario()$linearization)
+indiv_model <- getIndividualParameterModel()
+data_info <- getData()
+stratify_by <- unlist(params$stratify_by)
+```
+
+**Project file:** `r params$project`
+
+**Dataset:** `r data_info$dataFile`
+
+**Model:** `r getStructuralModel()`
+
+**Standard errors from:** `r methods$se`; **likelihood from:** `r methods$ll`
+
+**Report groups:** `r if (length(stratify_by)) paste(stratify_by, collapse = ", ") else "none (report.stratify_by not set)"`
+
+### Parameter Distributions and Random Effects
+
+```{r}
+specs <- data.frame(parameter = names(indiv_model$distribution),
+                    Distribution = unname(indiv_model$distribution),
+                    IIV = unname(indiv_model$variability$id[names(indiv_model$distribution)]))
+cov_model <- indiv_model$covariateModel
+if (length(cov_model) && length(cov_model[[1]])) {
+  cov_table <- as.data.frame(do.call(rbind, cov_model[specs$parameter]))
+  specs <- cbind(specs, cov_table)
+}
+check_cols <- setdiff(names(specs), c("parameter", "Distribution"))
+table <- specs %>%
+  mutate(across(all_of(check_cols), ~ ifelse(.x, "check", ""))) %>%
+  gt(rowname_col = "parameter")
+if (length(check_cols) > 1) table <- table %>% tab_spanner(label = "Covariates", columns = check_cols[-1])
+for (k in check_cols) {
+  table <- table %>% fmt_icon(columns = all_of(k), rows = !!sym(k) == "check")
+}
+table
+```
+
+### Error model and Covariate model Formulas
+```{r}
+cat("Error model:\n", paste(getContinuousObservationModel()$formula, collapse = "\n"), "\n")
+cat("Covariate model:\n", indiv_model$formula)
+```
+
+### Initial conditions and estimation method
+```{r}
+getPopulationParameterInformation() %>% gt() %>%
+  opt_interactive()
+```
+
+### Launched Tasks
+```{r}
+tasks <- getLaunchedTasks()
+data.frame(task = c(names(tasks), "linearization"),
+           launched = c(vapply(tasks, function(x) paste(x, collapse = ", "), character(1)),
+                        as.character(getScenario()$linearization))) %>%
+  gt()
+```
+
+
+# Predictions
+
+```{r}
+# Data, predictions and report groups. The observation column of predictions.txt is the one
+# column that isn't id, time or a prediction (see observation_column()).
+id_column <- data_info$header[data_info$headerTypes == "id"]
+data <- read_monolix_data(data_info$dataFile)
+predictions_file <- file.path(sub("\\.mlxtran$", "", params$project), "predictions.txt")
+predictions <- tryCatch(as.data.frame(read_csv(predictions_file, show_col_types = FALSE)),
+                        error = function(e) NULL)
+obs <- if (!is.null(predictions)) tryCatch(observation_column(predictions), error = function(e) NULL)
+groups <- tryCatch(report_groups(data, id_column, stratify_by, params$group_labels),
+                   error = function(e) { cat("Report groups not used:", conditionMessage(e), "\n");
+                     report_groups(data, id_column) })
+if (!is.null(predictions)) {
+  # predictions.txt calls the id column "id" or uses the data's id header
+  pred_id <- intersect(c("id", id_column), names(predictions))[1]
+  predictions <- merge(predictions, groups, by.x = pred_id, by.y = "id")
+  names(predictions)[names(predictions) == pred_id] <- "id"
+}
+if (is.null(predictions)) cat("No predictions.txt in the results folder; the conditional_mode task may not have run.\n")
+if (!is.null(predictions) && is.null(obs)) {
+  cat("Can't tell the observation column apart in predictions.txt (several observations?); prediction plots skipped.\n")
+}
+can_plot <- !is.null(predictions) && !is.null(obs)
+
+# Fine-grained curves (Monolix's individual fits chart data, on the `grid` time points).
+# Computed here when the results folder doesn't have them yet.
+results_dir <- sub("\\.mlxtran$", "", params$project)
+fits <- if (can_plot) read_indfits(results_dir, obs)
+if (can_plot && is.null(fits)) {
+  show_or_note(computeChartsData(plot = "indfits", output = obs))
+  fits <- read_indfits(results_dir, obs)
+}
+if (!is.null(fits)) {
+  ind_col <- attr(fits, "indiv_column")
+  fits <- merge(fits, groups, by = "id")
+  attr(fits, "indiv_column") <- ind_col
+} else if (can_plot) {
+  cat("No individual fits chart data (ChartsData/IndividualFits); predictions are drawn at the observation times only.\n")
+  ind_col <- intersect(c("indivPred_mode", "indivPred_mean"), names(predictions))[1]
+  fits <- data.frame(id = predictions$id, time = predictions$time, popPred = predictions$popPred,
+                     indivPred = predictions[[ind_col]], group = predictions$group)
+  attr(fits, "indiv_column") <- ind_col
+}
+
+# Group colours: Dark2 up to 8 groups, ggplot2's default hues beyond that
+n_groups <- nlevels(groups$group)
+group_colors <- if (n_groups <= 8) scale_color_brewer(palette = "Dark2") else NULL
+if (n_groups > 8) cat("More than 8 report groups; default colors used.\n")
+```
+
+## Population trends for each group
+
+```{r}
+if (can_plot) {
+  fits %>%
+    ggplot(aes(time, popPred, color = group)) +
+    geom_line(aes(group = id), linewidth = 1, alpha = 0.6) +
+    group_colors +
+    labs(x = "Time", y = obs, color = "Group", title = "Population predictions for each group") +
+    theme_report()
+}
+```
+
+## Predictions for each individual
+
+```{r}
+if (can_plot) {
+  ggplot(fits, aes(time, indivPred, color = group, group = id)) +
+    geom_point(data = predictions, aes(time, .data[[obs]]), alpha = 0.25) +
+    geom_line(alpha = 0.7) +
+    facet_wrap(~group) +
+    group_colors +
+    labs(x = "Time", y = obs, color = "Group",
+         title = paste0("Individual predictions (", attr(fits, "indiv_column"), ")")) +
+    theme_report()
+}
+```
+
+
+## Model variables for each individual
+
+```{r}
+# Model variables simulated with Simulx by generate_report() on a fine grid; otherwise the
+# model's `table = {...}` variables at the observation times (tables.txt)
+model_vars <- read_simulated_variables(results_dir)
+vars_subtitle <- "Simulated with Simulx from each individual's estimates"
+if (is.null(model_vars)) {
+  model_vars <- read_model_variables(results_dir)
+  vars_subtitle <- "At the observation times (tables.txt): no Simulx simulation for this report"
+}
+vars_prediction <- attr(model_vars, "prediction")
+if (!is.null(model_vars)) model_vars <- merge(model_vars, groups, by = "id")
+if (is.null(model_vars) || !nrow(model_vars)) {
+  cat("No model variables in tables.txt (add `table = {...}` to the model's OUTPUT section).\n")
+}
+vars_fig_height <- if (is.null(model_vars)) 3 else 1 + 1.8 * nlevels(model_vars$variable)
+```
+
+```{r, fig.height = vars_fig_height, fig.width = max(6, 1 + 2.5 * n_groups)}
+if (!is.null(model_vars) && nrow(model_vars)) {
+  ggplot(model_vars, aes(time, value, color = group, group = id)) +
+    geom_line(alpha = 0.7) +
+    facet_grid(variable ~ group, scales = "free_y") +
+    group_colors +
+    labs(x = "Time", y = NULL,
+         title = paste0("Individual predictions of the model variables (", vars_prediction, ")"),
+         subtitle = vars_subtitle) +
+    theme_report() +
+    theme(legend.position = "none")
+}
+```
+
+
+# Results
+
+## Population parameter estimates {.tabset}
+
+```{r}
+# Estimates (with CVs), standard errors and confidence intervals
+estimates <- getEstimatedPopulationParameters(coefficientsOfVariation = TRUE, withValuesByGroups = TRUE)
+if (is.list(estimates)) {
+  estimates[grepl("Infinity", estimates)] <- Inf
+  estimates <- unlist(estimates)
+}
+estimates <- data.frame(parameter = names(estimates), estimate = unname(as.numeric(estimates)))
+
+ses <- getEstimatedStandardErrors(withValuesByGroups = TRUE)[[methods$se]]
+cis <- tryCatch(getEstimatedConfidenceIntervals(withValuesByGroups = TRUE)[[methods$se]], error = function(e) NULL)
+all_parameters <- estimates
+if (!is.null(ses)) all_parameters <- merge(all_parameters, ses, by = "parameter", all.x = TRUE)
+if (!is.null(cis)) all_parameters <- merge(all_parameters, cis, by = "parameter", all.x = TRUE)
+has_ci <- all(c("P2.5", "P97.5") %in% names(all_parameters))
+
+is_pop <- grepl("_pop$", all_parameters$parameter)
+is_beta <- grepl("^beta_", all_parameters$parameter)
+is_cv <- grepl("_CV$", all_parameters$parameter)
+is_omega <- grepl("^omega", all_parameters$parameter) & !is_cv
+is_err <- is_error_param_name(all_parameters$parameter)
+```
+
+### Population parameters
+```{r}
+pop <- transform_estimates(all_parameters[is_pop, ], params$report_transforms)
+if (length(params$report_transforms)) {
+  pop <- pop %>% select(reported_parameter, starts_with("reported_"), everything())
+} else {
+  pop <- pop %>% select(-starts_with("reported_"))
+}
+gt_signif(pop)
+```
+
+### Treatment Effects
+Covariate effects (`beta_`). For log-normally distributed parameters, `exp(estimate)` is the fold change in the parameter.
+```{r}
+tab <- all_parameters[is_beta, ]
+if (nrow(tab)) {
+  tab <- tab %>% mutate(fold_change = exp(estimate))
+  if (has_ci) tab <- tab %>% mutate(fc_P2.5 = exp(P2.5), fc_P97.5 = exp(P97.5))
+  tab %>% select(parameter, estimate, fold_change, everything()) %>% gt_signif()
+} else {
+  cat("No covariate effects in the model.\n")
+}
+```
+
+### Population parameters by group
+```{r}
+tab <- all_parameters[!(is_pop | is_beta | is_omega | is_err | is_cv), ]
+if (nrow(tab)) gt_signif(tab) else cat("No values by group.\n")
+```
+
+### Standard deviations of random effects
+```{r}
+cv <- all_parameters[is_cv, c("parameter", "estimate")] %>%
+  transmute(parameter = sub("_CV$", "", parameter), CV = estimate)
+tab <- merge(all_parameters[is_omega, ], cv, by = "parameter", all.x = TRUE) %>%
+  mutate(fold_change = exp(estimate))
+if (has_ci) tab <- tab %>% mutate(fc_P2.5 = exp(P2.5), fc_P97.5 = exp(P97.5))
+tab %>% select(parameter, fold_change, estimate, CV, everything()) %>% gt_signif()
+```
+
+### Error model parameters
+```{r}
+gt_signif(all_parameters[is_err, ])
+```
+
+### Shrinkage
+```{r}
+shrinkage_df <- read_shrinkage(run = NA) %>% select(-run)
+gt_signif(shrinkage_df, 3)
+eta_params <- shrinkage_df$parameter
+```
+
+
+### Correlation of Estimates
+```{r, out.width="100%", out.height="100%", warning=TRUE}
+FIM <- tryCatch(getCorrelationOfEstimates()[[methods$se]], error = function(e) NULL)
+if (!is.null(FIM)) {
+  cn <- condition_number_of(FIM)
+  if (!is.na(cn)) cat("Condition number:", formatC(cn, format = "e", digits = 1), "\n")
+  as.data.frame(as.matrix(FIM)) %>% rownames_to_column("parameter1") %>%
+    pivot_longer(!parameter1, names_to = "parameter2") %>%
+    mutate(across(c(parameter1, parameter2), ~ factor(.x, levels = rownames(as.matrix(FIM))))) %>%
+    ggplot(aes(parameter1, parameter2, fill = value)) +
+    geom_tile() +
+    geom_text(data = . %>% filter(abs(value) > 0.5), aes(label = round(value, 2)), size = 1.7) +
+    labs(fill = "correlation", x = "", y = "") +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", limits = c(-1.1, 1.1)) +
+    theme_report() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+} else {
+  cat("Standard errors not estimated.\n")
+}
+```
+
+## Individual parameter estimates {.tabset}
+
+### Parameter Distributions
+
+Test if the transformed individual parameters are normally distributed with the Shapiro Wilk test
+```{r}
+if (!is.null(stat_tests[["indivParams"]])) {
+  stat_tests$indivParams %>%
+    select(parameters, statistic = statistics, `p-value` = p.value) %>%
+    gt(rowname_col = "parameters") %>%
+    tab_options(column_labels.font.weight = "bold", stub.font.weight = "bold")
+} else {
+  cat("All parameters have covariates.\n")
+}
+```
+
+#### PDF
+```{r}
+show_or_note(invisible(plotParametersDistribution(parameters = eta_params, settings = list(ncol = 3, legend = TRUE))))
+```
+
+#### CDF
+```{r}
+show_or_note(invisible(plotParametersDistribution(parameters = eta_params, settings = list(ncol = 3, legend = TRUE), plot = "cdf")))
+```
+
+### Correlation of individual parameters
+```{r, out.width="100%", out.height="100%"}
+# Pairs of individual parameters (or of their random effects, prefix "eta_"); the tables
+# also have id, rep and the covariates, which are left out
+pairs_plot <- function(df, prefix = "") {
+  cols <- intersect(paste0(prefix, names(indiv_model$distribution)), names(df))
+  ggpairs(df, columns = cols, progress = FALSE,
+          diag = list(continuous = function(data, mapping) ggplot(data, mapping) + geom_histogram(fill = "black", bins = 30))) +
+    theme_report()
+}
+show_or_note(pairs_plot(getSimulatedIndividualParameters()))
+```
+
+### Correlation of random effects
+
+```{r, out.width="100%", out.height="100%"}
+show_or_note(pairs_plot(getSimulatedRandomEffects(), prefix = "eta_"))
+```
+
+Test if random effects are correlated using a t-test
+```{r}
+if (!is.null(stat_tests$randomEffectsCorrelation)) {
+  stat_tests$randomEffectsCorrelation %>%
+    mutate(value = paste0(signif(statistics, 2), " (", format(signif(p.value, 3), scientific = TRUE), ")")) %>%
+    select(eta1, eta2, value) %>% pivot_wider(names_from = eta1, values_fill = "") %>%
+    gt(rowname_col = "eta2") %>%
+    tab_options(column_labels.font.weight = "bold", stub.font.weight = "bold") %>%
+    tab_stubhead(label = "random effect") %>%
+    tab_spanner(everything(), label = "Random Effect") %>%
+    tab_footnote(footnote = "Numbers in parentheses are p-values from a t-test.",
+                 locations = cells_column_spanners(spanners = everything()))
+} else {
+  cat("Not available: Monolix tests correlations between random effects only when at least two parameters have one.\n")
+}
+```
+
+### Distribution of Random Effects
+
+Test if the random effects are normally distributed using Shapiro-Wilk test
+```{r}
+if (!is.null(stat_tests$randomEffects)) {
+  stat_tests$randomEffects %>%
+    select(eta, statistic = statistics, `p-value` = p.value) %>%
+    gt(rowname_col = "eta") %>%
+    tab_options(column_labels.font.weight = "bold", stub.font.weight = "bold") %>%
+    tab_stubhead(label = "random effect")
+} else {
+  cat("Not available (no Monolix tests for this project).\n")
+}
+```
+
+```{r}
+show_or_note(plotStandardizedRandomEffectsDistribution(parameters = eta_params))
+```
+
+
+### Parameters vs Covariates
+
+Test for correlation of parameters and covariates with a t-test and the Wald test
+```{r}
+p_style <- function(tab, column) {
+  tab %>% tab_style(style = cell_text(weight = "bold", color = "red"),
+                    locations = cells_body(columns = all_of(column), rows = .data[[column]] > 0.05))
+}
+wald <- stat_tests$wald
+ttest <- stat_tests$indivParamsCorrelation
+if (!is.null(wald) && !is.null(ttest)) {
+  merge(ttest, wald %>% rename(covariate = parameter), by = "covariate") %>%
+    select(parameter, covariate, statistics.x, p.value.x, statistics.y, p.value.y) %>%
+    mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+    group_by(parameter) %>%
+    gt(rowname_col = "covariate") %>%
+    tab_spanner(label = "T-Test", columns = ends_with("x")) %>%
+    tab_spanner(label = "Wald Test", columns = ends_with("y")) %>%
+    cols_label(p.value.x = "p-value", p.value.y = "p-value", statistics.x = "statistic", statistics.y = "statistic") %>%
+    tab_stubhead(label = "Covariate") %>%
+    p_style("p.value.y")
+} else if (!is.null(wald)) {
+  wald %>% rename(covariate = parameter) %>% select(-any_of("method")) %>%
+    mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+    gt(rowname_col = "covariate") %>%
+    cols_label(p.value = "p-value", statistics = "statistic") %>%
+    tab_stubhead(label = "Covariate") %>%
+    p_style("p.value")
+} else if (!is.null(ttest)) {
+  ttest %>% select(parameter, covariate, statistics, p.value) %>%
+    mutate(across(where(is.numeric), ~ signif(.x, 3))) %>%
+    group_by(parameter) %>%
+    gt(rowname_col = "covariate") %>%
+    tab_spanner(label = "T-Test", columns = c("statistics", "p.value")) %>%
+    cols_label(p.value = "p-value", statistics = "statistic") %>%
+    tab_stubhead(label = "Covariate")
+} else {
+  cat("No covariates.\n")
+}
+```
+
+Test whether covariates should be added to the model using Pearson's correlation test and/or ANOVA
+
+```{r}
+if (!is.null(stat_tests$randomEffectsVsCovariatesCorrelation)) {
+  stat_tests$randomEffectsVsCovariatesCorrelation %>%
+    mutate(value = paste0(signif(statistics, 2), " (", format(signif(p.value, 3), scientific = TRUE), ")")) %>%
+    select(eta, covariate, value) %>% pivot_wider(names_from = covariate) %>%
+    gt(rowname_col = "eta") %>%
+    tab_options(column_labels.font.weight = "bold", stub.font.weight = "bold") %>%
+    tab_stubhead(label = "Random Effect") %>%
+    tab_spanner(everything(), label = "Covariate Correlation") %>%
+    tab_footnote(footnote = "Numbers in parentheses are p-values.",
+                 locations = cells_column_spanners(spanners = everything()))
+} else {
+  cat("No covariates.\n")
+}
+```
+
+#### Parameters vs covariates
+
+```{r, out.width="100%", out.height="100%"}
+show_or_note(invisible(plotParametersVsCovariates(parameters = eta_params)))
+```
+
+
+## Model Diagnostics {.tabset}
+
+### Log Likelihood
+```{r, warning=TRUE}
+ll <- getEstimatedLogLikelihood()[[methods$ll]]
+if (!is.null(ll)) {
+  as.data.frame(t(unlist(ll))) %>% gt()
+} else {
+  cat("Likelihood not estimated.\n")
+}
+```
+
+```{r}
+if (!is.null(ll) && methods$ll == "importanceSampling") show_or_note(plotImportanceSampling())
+```
+
+
+### Observed vs Predicted
+
+```{r}
+show_or_note(plotObservationsVsPredictions(settings = list(predInterval = TRUE)))
+```
+
+
+### Visual Predictive Check {.tabset}
+#### Full data
+
+##### Visual Predictive Check
+```{r}
+show_or_note(plotVpc())
+```
+
+##### Prediction Distribution
+```{r}
+show_or_note(plotPredictionDistribution(settings = list(obs = TRUE, ncol = 2, cens = TRUE)))
+```
+
+#### Stratified by report groups
+
+```{r}
+# Monolix can only split by covariates defined in the project
+split <- intersect(stratify_by, getCovariateInformation()$name)
+if (!length(split)) cat("No stratification: report.stratify_by is not set, or its columns aren't covariates in the project.\n")
+```
+
+##### Visual Predictive Check
+```{r}
+if (length(split)) show_or_note(plotVpc(stratify = list(split = split), settings = list(ncol = 2)))
+```
+
+##### Prediction Distribution
+```{r}
+if (length(split)) {
+  show_or_note(plotPredictionDistribution(settings = list(obs = TRUE, ncol = 2, cens = TRUE),
+                                          stratify = list(split = split)))
+}
+```
+
+
+### BLQ check
+```{r}
+show_or_note(plotBlqPredictiveCheck())
+```
+
+### Numerical Predictive Check
+```{r}
+show_or_note(plotNpc())
+```
+
+
+### Residuals
+
+#### Residual Distribution
+```{r}
+show_or_note(invisible(plotResidualsDistribution(settings = list(ncol = 2))))
+```
+
+#### Residual Scatterplot
+```{r}
+show_or_note(invisible(plotResidualsScatterPlot()))
+```
+
+
+## Performance of Estimation Algorithms {.tabset}
+
+### SAEM
+```{r, out.width="100%", out.height="100%"}
+show_or_note(invisible(plotSaem()))
+```
+
+### Sampling Conditional Distributions
+```{r}
+show_or_note(invisible(plotMCMC()))
+```
