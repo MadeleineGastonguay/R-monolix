@@ -99,7 +99,7 @@ history_result <- function(part, results) {
   best_igs <- function(igs) {
     te <- igs$tabestimates
     list(runs = length(unique(te$run)), best_bicc = signif(min(te$bicc, na.rm = TRUE), 6),
-         best_run = te$run[which.min(te$bicc)])
+         best_run = as.integer(te$run[which.min(te$bicc)]))
   }
   tryCatch(switch(sub("^.*/", "", part),
     step1_igs = list(wide = best_igs(results$wide), narrow = best_igs(results$narrow)),

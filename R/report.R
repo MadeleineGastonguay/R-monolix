@@ -203,3 +203,11 @@ censoring_table <- function(data, header, header_types) {
   names(out)[1] <- id
   out[order(out[[id]], out$time), , drop = FALSE]
 }
+
+# A table from getTests() if it has rows, else NULL. Monolix returns an empty `AsIs` object for
+# a test it couldn't run, which dplyr can't use.
+usable_table <- function(x) {
+  if (!is.data.frame(x) || !nrow(x)) return(NULL)
+  class(x) <- setdiff(class(x), "AsIs")
+  x
+}

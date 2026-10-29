@@ -107,3 +107,12 @@ test_that("censoring_table marks censored observations per id and time", {
   expect_equal(ct$censored, c(TRUE, FALSE, TRUE))
   expect_null(censoring_table(d[, 1:3], c("ID", "t", "y"), c("id", "time", "observation")))
 })
+
+test_that("usable_table keeps only Monolix test tables with rows", {
+  d <- data.frame(eta1 = "eta_V", eta2 = "eta_k", statistics = 1, p.value = 0.3)
+  expect_equal(usable_table(d), d)
+  expect_equal(class(usable_table(I(d))), "data.frame")   # dplyr can't use an AsIs table
+  expect_null(usable_table(I(list())))                    # a test Monolix couldn't run
+  expect_null(usable_table(d[0, ]))
+  expect_null(usable_table(NULL))
+})

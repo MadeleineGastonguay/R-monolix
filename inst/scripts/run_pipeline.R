@@ -13,12 +13,22 @@
 
 library(monolixPipelineR)
 
-# Setup ####
-# analysis.yaml comes from draft_config("model.txt", "data.txt", name = "my_analysis"); fill in
-# every value marked REQUIRED. Paths in it are relative to the file.
+# Draft analysis.yaml (first time only) ####
+# Writes analysis.yaml from the model and data, with column types guessed from the data and
+# every setting filled in. Check the guessed values (marked `# guessed`) and fill in every
+# value marked REQUIRED, mainly a plausible range for each parameter. An existing
+# analysis.yaml is never overwritten.
 CONFIG <- "analysis.yaml"
+MODEL <- "model.txt"   # Mlxtran structural model
+DATA <- "data.csv"     # long-format data
+NAME <- "my_analysis"  # results go to results/<NAME>
+if (!file.exists(CONFIG)) draft_config(MODEL, DATA, name = NAME, path = CONFIG)
+
+# Setup ####
+# Paths in analysis.yaml are relative to the file. validate_config() lists every problem at once.
 init_monolix()
 config <- read_analysis_config(CONFIG)
+validate_config(config, 1)
 paths <- pipeline_paths(config)   # where each step writes its results
 paths$root
 

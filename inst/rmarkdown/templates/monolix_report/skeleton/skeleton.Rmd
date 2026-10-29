@@ -43,7 +43,9 @@ gt_signif <- function(df, digits = 2) gt(mutate(df, across(where(is.numeric), ~ 
 ```{r}
 loaded <- loadProject(projectFile = params$project)
 if (isFALSE(loaded)) stop("Monolix could not load ", params$project)
-stat_tests <- getTests()
+# Monolix's tests; a test it couldn't run comes back empty (e.g. correlations between random
+# effects when only one parameter has one), so keep only tables with rows
+stat_tests <- Filter(Negate(is.null), lapply(getTests(), usable_table))
 methods <- result_methods(getScenario()$linearization)
 indiv_model <- getIndividualParameterModel()
 data_info <- getData()
@@ -378,7 +380,7 @@ if (!is.null(stat_tests$randomEffectsCorrelation)) {
     tab_footnote(footnote = "Numbers in parentheses are p-values from a t-test.",
                  locations = cells_column_spanners(spanners = everything()))
 } else {
-  cat("Not available (no Monolix tests for this project).\n")
+  cat("Not available: Monolix tests correlations between random effects only when at least two parameters have one.\n")
 }
 ```
 
