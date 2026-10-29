@@ -17,7 +17,6 @@ needs a real run too.
 - **Models with regressors** in the report's Simulx simulation (models with doses are checked).
 - **Several observation types.** The report's prediction plots need one observation column in
   `predictions.txt` and are skipped otherwise.
-- Whether Monolix rejects a structural parameter named `c` (`a` and `b` are rejected).
 
 ## Improvements
 - **Step 4 resumes from scratch.** If it stops partway, models already fitted are fitted
