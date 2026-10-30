@@ -122,9 +122,8 @@ are fitted once.
 
 A model with three parameters (`param1`, `param2`, `param3`, with `param2`
 logit-normal between 0 and 100), one observation (`y`) and three covariates,
-with every decision made. Keys you leave out take
-their defaults (`config_defaults()`), including Monolix's SAEM settings
-(`estimation`) and the tasks run for each fit (`scenario`).
+with every decision made. Keys you leave out take their defaults
+(`config_defaults()`).
 
 ``` yaml
 analysis:
@@ -139,9 +138,20 @@ data:
 model:
   structural_model: model.txt
   error_model: {y: combined1}   # constant, proportional, combined1 or combined2
+  error_initial: {a: 1, b: 0.3} # starting values of the error parameters, still estimated (these are Monolix's defaults)
   random_effects_excluded: []   # parameters with no random effect at all
   distributions:                # lognormal unless listed; also normal, logitnormal, probitnormal
     param2: {distribution: logitnormal, limits: [0, 100]}   # limits: logitnormal only, default [0, 1]
+  report_transforms:            # how estimates are shown in the reports; model scale everywhere else
+    param1_pop: {label: "param1 (x 10^5)", expr: "x * 10^5"}
+
+estimation:                     # Monolix's SAEM settings: iterations in each phase
+  saem: {burn_in: 50, exploratory: 1000, smoothing: 500}
+
+scenario:                       # Monolix tasks run for every fit (population_parameters, conditional_mode
+                                # and log_likelihood can't be turned off)
+  standard_errors: true         # false: faster, but RSEs and condition numbers are NA
+  linearization: false          # true: standard errors and likelihood by linearization (faster)
 
 step1_igs:
   initial_ranges:               # plausible range of each parameter, sampled uniformly
@@ -169,6 +179,8 @@ step2_igs: {nits: 100}
 step3_model_building:
   method: SCM                   # SCM, COSSAC, [SCM, COSSAC] or none
   criterion: BIC                # BICc in Monolix; or LRT. Used by SCM and COSSAC
+  lrt_thresholds: {forward: 0.05, backward: 0.01}   # p-value cut-offs, with criterion LRT only
+  scm_stop_rule_delta_bicc: 2   # scm_delta2: SCM's path, stopped once a step improves BICc by less than 2
   covariates: [cov1, cov2, cov3]   # covariates to search; all (the default) for every covariate column
   parameters: [param1, param2]  # parameters to search; all (the default) for every parameter
   relationships: {include: {param1: [cov1]}}   # in every model; `exclude` for none
@@ -213,6 +225,20 @@ the bound. Leaving it at `~` (the default) uses the estimates' range as is.
 can take: above 0 for lognormal, between the limits for logitnormal, between 0
 and 1 for probitnormal, anything for normal. `validate_config()` checks that
 sampling ranges, fixed values and profile likelihood grids lie inside them.
+
+**Rescaled parameters in the reports.** A model can estimate a parameter on a
+convenient scale and rescale it in the model file (for example
+`param1_real = param1 * 10^5`), so that Monolix's estimates stay near 1.
+`model.report_transforms` shows such a parameter on the scale people read: each
+key is a population parameter, `expr` is an R expression in `x` (the estimate on
+the model's scale; only `x` may appear) and `label` is the name to show. The
+transforms apply to the final report's population parameter table, which adds
+the label and the rescaled estimate and 95% confidence limits next to Monolix's
+own values, and to step 1's parameter-range figure. Everything else stays on
+the model's scale: sampling ranges, fixed values, profile likelihood grids,
+the other pages and the CSV files. `draft_config()` guesses a transform for
+every input the model only multiplies by a constant, marked `# guessed`; set
+`report_transforms: {}` to show every parameter as Monolix estimates it.
 
 **Report groups.** The report's plots show one group per combination of the
 `stratify_by` covariates. A group's key is its covariate values joined with

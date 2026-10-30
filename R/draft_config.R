@@ -152,7 +152,10 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("  compare: ~", cm("CHECKPOINT 2b (after step 3's single fits): all, or a list of candidates to compare"))
   ln("  omega_initial: ", yv(s4$omega_initial))
   ln("  treatment_initial: ", yv(s4$treatment_initial))
-  ln("  fdr_method: ", yv(s4$fdr_method))
+  ln("  fdr_method: ", yv(s4$fdr_method),
+     cm(paste0("adjustment of the Wald p-values of covariate effects, pooled over every model and paired run: ",
+               "fdr (= BH, recommended), BY, none (raw p-values, still in the p_adjusted column), or holm, hochberg, ",
+               "hommel, bonferroni, which get stricter as nits grows")))
   ln("  final_model: ~", cm("CHECKPOINT 3"))
   ln("  final_rationale: ~")
   ln("")
