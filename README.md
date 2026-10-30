@@ -3,7 +3,7 @@
 monolixPipelineR fits nonlinear mixed effects models in Monolix from R, through
 lixoftConnectors. It's built to assess practical identifiability of model
 parameters through initial guess sampling (ISG; also known as a multi-start
-approach [1-3], and implement rigorous comparison of several candidate treatment
+approach) [1-3], and implement rigorous comparison of several candidate treatment
 effect models. The steps in this workflow are:
 
 1.  **Identifiability.** Fit the model without covariates from many starting
