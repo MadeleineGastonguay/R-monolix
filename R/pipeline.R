@@ -296,7 +296,7 @@ run_profiles <- function(config, step1 = NULL, rerun = FALSE) {
 # getPopulationParameterInformation(); anything else keeps the project's value.
 profile_initial_values <- function(config, best, info) {
   pp <- info$name
-  v <- stats::setNames(best$estimate, best$parameter)[pp]
+  v <- stats::setNames(stats::setNames(best$estimate, best$parameter)[pp], pp)  # NA (and named) when not estimated
   v[is.na(v)] <- info$initialValue[is.na(v)]
   v[grepl("^omega", pp)] <- 1
   err <- error_starts(model_spec(config, use_fixed = FALSE), pp)

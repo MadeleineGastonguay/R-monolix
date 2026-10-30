@@ -19,7 +19,6 @@ Data frame with \code{parameter} (the \verb{_pop} name), \code{distribution},
 \description{
 From \code{model.distributions}: lognormal parameters (Monolix's default) must
 be above 0, logit-normal ones between their limits ((0, 1) unless
-\code{limits} is given), probit-normal ones between 0 and 1, and normal ones
-can take any value. Sampling ranges, fixed values and profile grids must
-lie strictly inside these bounds.
+\code{limits} is given), and normal ones can take any value. Sampling ranges,
+fixed values and profile grids must lie strictly inside these bounds.
 }

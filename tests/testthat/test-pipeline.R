@@ -352,3 +352,13 @@ test_that("step 3's candidates can be refitted without redoing the search", {
   expect_equal(vapply(calls_of(env, "figures_page"), `[[`, numeric(1), "x"), c(1, 3, 3, 3))
   expect_true("model1" %in% out$single_fits$model)
 })
+
+test_that("profile starting values keep one row per parameter when some have no estimate", {
+  # like the fixed c of a proportional error model: in the project, not in step 1's estimates
+  cfg <- read_analysis_config(make_config(list("    vl: constant" = "    vl: proportional")))
+  info <- data.frame(name = c("lambda_pop", "omega_lambda", "b", "c"), initialValue = c(1, 1, 1, 1))
+  best <- data.frame(parameter = c("lambda_pop", "omega_lambda", "b"), estimate = c(50, 0.4, 0.2))
+  iv <- profile_initial_values(cfg, best, info)
+  expect_equal(iv$name, info$name)
+  expect_equal(iv$initialValue, c(50, 1, 0.3, 1))  # estimate, omega at 1, error parameters at their usual starts
+})

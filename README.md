@@ -140,7 +140,7 @@ model:
   error_model: {y: combined1}   # constant, proportional, combined1 or combined2
   error_initial: {a: 1, b: 0.3} # starting values of the error parameters, still estimated (these are Monolix's defaults)
   random_effects_excluded: []   # parameters with no random effect at all
-  distributions:                # lognormal unless listed; also normal, logitnormal, probitnormal
+  distributions:                # lognormal unless listed; also normal or logitnormal
     param2: {distribution: logitnormal, limits: [0, 100]}   # limits: logitnormal only, default [0, 1]
   report_transforms:            # how estimates are shown in the reports; model scale everywhere else
     param1_pop: {label: "param1 (x 10^5)", expr: "x * 10^5"}
@@ -222,9 +222,11 @@ widening would cross one, the range ends halfway between the estimates and
 the bound. Leaving it at `~` (the default) uses the estimates' range as is.
 
 **Distributions and bounds.** Each parameter's distribution sets the values it
-can take: above 0 for lognormal, between the limits for logitnormal, between 0
-and 1 for probitnormal, anything for normal. `validate_config()` checks that
-sampling ranges, fixed values and profile likelihood grids lie inside them.
+can take: above 0 for lognormal, between the limits for logitnormal, anything
+for normal. `validate_config()` checks that sampling ranges, fixed values and
+profile likelihood grids lie inside them. Monolix's probit-normal distribution
+isn't available: Monolix 2024R1 ignores it when lixoftConnectors asks for it,
+so use logitnormal, which is also on (0, 1) by default.
 
 **Rescaled parameters in the reports.** A model can estimate a parameter on a
 convenient scale and rescale it in the model file (for example

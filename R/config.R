@@ -315,8 +315,12 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
     dl <- config$model$distributions %||% list()
     if (length(setdiff(names(dl), params))) add("model.distributions has unknown parameter(s): ", paste(setdiff(names(dl), params), collapse = ", "))
     dt <- parse_distributions(dl)$type
-    if (any(is.na(dt)) || length(setdiff(dt, names(DISTRIBUTIONS)))) {
-      add("model.distributions values must be lognormal, normal, logitnormal or probitnormal, ",
+    if (any(dt %in% "probitnormal", na.rm = TRUE)) {
+      add("model.distributions: probitnormal isn't supported (Monolix 2024R1 leaves the parameter lognormal ",
+          "when lixoftConnectors asks for it); use logitnormal, whose default limits are also [0, 1]")
+    }
+    if (any(is.na(dt)) || length(setdiff(dt, c(names(DISTRIBUTIONS), "probitnormal")))) {
+      add("model.distributions values must be lognormal, normal or logitnormal, ",
           "or {distribution: logitnormal, limits: [min, max]}")
     }
     for (k in names(dl)) {
@@ -327,7 +331,7 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
       if (is.null(d$limits)) next
       l <- unlist(d$limits)
       if (!identical(tolower(as.character(d$distribution %||% "")), "logitnormal")) {
-        add("model.distributions.", k, ": limits apply only to logitnormal parameters (probitnormal is always between 0 and 1)")
+        add("model.distributions.", k, ": limits apply only to logitnormal parameters")
       } else if (!is.numeric(l) || length(l) != 2 || !all(is.finite(l)) || l[1] >= l[2]) {
         add("model.distributions.", k, ".limits must be [min, max] with min < max")
       }

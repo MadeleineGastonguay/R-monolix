@@ -58,8 +58,8 @@ model_spec <- function(config, treatment_effects = NULL, use_fixed = TRUE) {
 }
 
 # Distribution names in analysis.yaml and Monolix's spelling of them
-DISTRIBUTIONS <- c(lognormal = "logNormal", normal = "normal", logitnormal = "logitNormal",
-                   probitnormal = "probitNormal")
+# (no probitnormal: Monolix 2024R1 ignores probitNormal from lixoftConnectors and keeps logNormal)
+DISTRIBUTIONS <- c(lognormal = "logNormal", normal = "normal", logitnormal = "logitNormal")
 
 # model.distributions as a distribution per parameter (`type`, analysis.yaml names) and the
 # bounds of each logit-normal parameter (`limits`, (0, 1) unless given). An entry is either a
@@ -80,9 +80,8 @@ parse_distributions <- function(x) {
 #'
 #' From `model.distributions`: lognormal parameters (Monolix's default) must
 #' be above 0, logit-normal ones between their limits ((0, 1) unless
-#' `limits` is given), probit-normal ones between 0 and 1, and normal ones
-#' can take any value. Sampling ranges, fixed values and profile grids must
-#' lie strictly inside these bounds.
+#' `limits` is given), and normal ones can take any value. Sampling ranges,
+#' fixed values and profile grids must lie strictly inside these bounds.
 #'
 #' @param distributions `model.distributions` from the config, e.g.
 #'   `list(param1 = "normal", param2 = list(distribution = "logitnormal", limits = c(0, 100)))`.
@@ -96,7 +95,7 @@ parameter_bounds <- function(distributions, parameters) {
   known <- intersect(names(d$type)[!is.na(d$type)], parameters)
   type[known] <- d$type[known]
   lower <- stats::setNames(ifelse(type == "normal", -Inf, 0), parameters)
-  upper <- stats::setNames(ifelse(type %in% c("logitnormal", "probitnormal"), 1, Inf), parameters)
+  upper <- stats::setNames(ifelse(type == "logitnormal", 1, Inf), parameters)
   for (p in intersect(names(d$limits), parameters)) {
     l <- d$limits[[p]]
     if (length(l) == 2 && all(is.finite(l))) { lower[p] <- l[1]; upper[p] <- l[2] }

@@ -48,8 +48,8 @@ set_project_settings <- function(linearize = FALSE, estimation = NULL, scenario 
 #'
 #' @param distributions Named character vector or list of parameter
 #'   distributions, e.g. `c(param1 = "normal", param2 = "logitnormal")`
-#'   (`lognormal`, `normal`, `logitnormal`, `probitnormal`, or Monolix's
-#'   spelling, e.g. `logNormal`).
+#'   (`lognormal`, `normal`, `logitnormal`, or Monolix's spelling, e.g.
+#'   `logNormal`). Stops if Monolix doesn't apply one of them.
 #' @param limits Named list of `c(min, max)` bounds for logit-normal
 #'   parameters, e.g. `list(param2 = c(0, 100))`; Monolix's default is (0, 1).
 #' @param estimation,scenario Passed to [set_project_settings()].
@@ -106,12 +106,24 @@ create_project <- function(model_file, data_file,
     lixoftConnectors::setCovariateModel(covariateModel)
   }
   
+  # Monolix sets logit limits only when the starting value is already inside them, so move it
+  # there first (before the distribution too, to avoid Monolix adjusting the default limits)
+  if(length(limits)) start_inside_limits(limits)
+
   # `distributions` (named, e.g. c(ta = "normal")) generalizes `normal_dist`
   if(!is.null(normal_dist) || length(distributions) > 0){
     current <- lixoftConnectors::getIndividualParameterModel()$distribution
     current[normal_dist] <- "normal"
     current[names(distributions)] <- monolix_distribution(unlist(distributions))
     lixoftConnectors::setIndividualParameterDistribution(current)
+    # Monolix can ignore a distribution without an R error (probitNormal in 2024R1): check
+    got <- lixoftConnectors::getIndividualParameterModel()$distribution
+    got <- as.character(got[names(current)])
+    bad <- names(current)[is.na(got) | tolower(got) != tolower(current)]
+    if (length(bad)) {
+      stop("Monolix did not apply the distribution of ", paste0(bad, " (", current[bad], ")", collapse = ", "),
+           "; it kept ", paste(got[match(bad, names(current))], collapse = ", "), ". See any [ERROR] message above.", call. = FALSE)
+    }
   }
   if(length(limits)) set_logit_limits(limits)
   
@@ -135,27 +147,32 @@ monolix_distribution <- function(x) {
   ifelse(is.na(out), x, out)
 }
 
-# Set the bounds of logit-normal parameters on the loaded project. Monolix needs each
-# parameter's starting value inside its bounds, so starting values outside them move to the
-# middle (the IGS sets its own starting values later).
+# Move the starting value of each limited parameter (`<p>_pop`) to the middle of its limits
+# when it's outside them (Monolix's default is 1). The IGS sets its own starting values later.
+start_inside_limits <- function(limits) {
+  pop <- lixoftConnectors::getPopulationParameterInformation()
+  moved <- FALSE
+  for (p in names(limits)) {
+    l <- as.numeric(limits[[p]])
+    i <- pop$name == paste0(p, "_pop")
+    if (any(i) && outside_bounds(pop$initialValue[i], l[1], l[2])) {
+      pop$initialValue[i] <- mean(l)
+      moved <- TRUE
+    }
+  }
+  if (moved) lixoftConnectors::setPopulationParameterInformation(pop)
+  invisible(moved)
+}
+
+# Set the bounds of logit-normal parameters on the loaded project (their starting values must
+# already be inside them: start_inside_limits()), and check that Monolix took them.
 set_logit_limits <- function(limits) {
   limits <- lapply(limits, as.numeric)
-  applied <- function() {
-    got <- lixoftConnectors::getIndividualParameterModel()$limits
-    vapply(names(limits), function(p) isTRUE(all.equal(as.numeric(unlist(got[[p]])), limits[[p]])), logical(1))
-  }
   do.call(lixoftConnectors::setIndividualLogitLimits, limits)
-  if (all(applied())) return(invisible(TRUE))
-  pop <- lixoftConnectors::getPopulationParameterInformation()
-  for (p in names(limits)) {
-    i <- pop$name == paste0(p, "_pop")
-    if (any(i) && outside_bounds(pop$initialValue[i], limits[[p]][1], limits[[p]][2])) pop$initialValue[i] <- mean(limits[[p]])
-  }
-  lixoftConnectors::setPopulationParameterInformation(pop)
-  do.call(lixoftConnectors::setIndividualLogitLimits, limits)
-  bad <- names(limits)[!applied()]
-  if (length(bad)) {
-    stop("Monolix did not set the limits of ", paste(bad, collapse = ", "),
+  got <- lixoftConnectors::getIndividualParameterModel()$limits
+  ok <- vapply(names(limits), function(p) isTRUE(all.equal(as.numeric(unlist(got[[p]])), limits[[p]])), logical(1))
+  if (!all(ok)) {
+    stop("Monolix did not set the limits of ", paste(names(limits)[!ok], collapse = ", "),
          "; see the [ERROR] message above. Limits apply only to logitnormal parameters.", call. = FALSE)
   }
   invisible(TRUE)

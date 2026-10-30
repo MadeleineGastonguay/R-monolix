@@ -261,9 +261,10 @@ test_that("bounded distributions are parsed, and values outside the bounds are r
   expect_match(err, "profile_likelihood.p_pop: p has a logitnormal")
 
   # badly written entries
-  err <- chk(list("  distributions: {}" = "  distributions: {p: {distribution: probitnormal, limits: [0, 2]}, m: {distribution: logitnormal, limits: [5, 1]}, ta: {dist: normal}}"))$err
+  err <- chk(list("  distributions: {}" = "  distributions: {p: {distribution: normal, limits: [0, 2]}, m: {distribution: logitnormal, limits: [5, 1]}, ta: {dist: normal}, NPs: probitnormal}"))$err
   expect_match(err, "limits apply only to logitnormal")
+  expect_match(err, "probitnormal isn't supported")
   expect_match(err, "m.limits must be \\[min, max\\] with min < max")
   expect_match(err, "ta: unknown key\\(s\\) dist")
-  expect_match(err, "values must be lognormal, normal, logitnormal or probitnormal")
+  expect_match(err, "values must be lognormal, normal or logitnormal")
 })

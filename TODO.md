@@ -4,7 +4,9 @@ Checked on real Monolix (MonolixSuite2024R1) so far: every step from step 1 to t
 on a synthetic viral-load model (with SCM and COSSAC, BICc and LRT, locked and excluded
 covariate relationships, a parameter without a random effect, profile likelihoods) and on
 Monolix's phenobarbital demo (a PK model with doses, a random effect removed at checkpoint 1,
-step 4 with one model). The tests use a fake Monolix, so anything new that talks to Monolix
+step 4 with one model, and a logit-normal parameter with custom limits through every step,
+its profile likelihood and the report). Monolix 2024R1 ignores `probitNormal` from
+lixoftConnectors, so it isn't offered. The tests use a fake Monolix, so anything new that talks to Monolix
 needs a real run too.
 
 ## Not yet checked on real Monolix
@@ -14,10 +16,6 @@ needs a real run too.
   entries, so `scm_results_table()` and `plot_model_building()` haven't seen COSSAC's
   alternating order. COSSAC with a parameter without a random effect (which Monolix handles with
   SCM at the end) has only had a quick run.
-- **Logit-normal limits** (`model.distributions: {param: {distribution: logitnormal, limits: [min, max]}}`):
-  `set_logit_limits()` calls `setIndividualLogitLimits()`, and moves the starting value inside
-  the limits if Monolix doesn't take them at first. Also check that Monolix accepts
-  `probitNormal`, which the connectors' help pages don't list.
 - **Models with regressors** in the report's Simulx simulation (models with doses are checked).
 - **Several observation types.** The report's prediction plots need one observation column in
   `predictions.txt` and are skipped otherwise.
