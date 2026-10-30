@@ -207,8 +207,7 @@ report:
 value uniformly between `min` and `max`. With `log10: true` it draws uniformly
 on a log scale, so a range of 0.1 to 100 gets as many starts between 0.1 and 1
 as between 10 and 100; use it for ranges that span more than a factor of 10.
-Without it, starts are spread evenly on a linear scale: over 0.1 to 100,
-90% of them would be above 10.
+Without it, starts are spread evenly on a linear scale.
 
 **Narrow ranges.** The narrow IGS samples each parameter between the lowest and
 highest estimates of the best wide runs (cumulative BICc weight up to
