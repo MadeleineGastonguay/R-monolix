@@ -35,7 +35,7 @@ model:
     vl: constant
   error_initial: {}  # starting values for error-model parameters, which are still estimated; default Monolix's: a = 1, b = 0.3, c = 1
   random_effects_excluded: []  # parameters with no random effect; model parameters: lambda, betas, ta, NPs, p, m
-  distributions: {}  # e.g. {ta: normal}; default lognormal
+  distributions: {}  # default lognormal; e.g. {ta: normal}
   report_transforms:  # how estimates are shown in reports
     NPs_pop: {label: NP_pop, expr: x * 10^5}  # from `NP = NPs * 10^5` in the model
     betas_pop: {label: beta_pop, expr: x * 10^(-7)}  # from `beta = betas * 10^(-7)` in the model

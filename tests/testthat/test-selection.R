@@ -22,6 +22,19 @@ test_that("min_fold_width widens ranges to at least [best/f, best*f]", {
   expect_equal(r10$max[r10$parameter == "k_pop"], 3.0)
 })
 
+test_that("min_fold_width stops halfway to a parameter's bounds", {
+  b <- data.frame(parameter = "k_pop", distribution = "logitnormal", lower = 0.8, upper = 1.5)
+  r <- get_narrow_ranges(fake_tabestimates(), p_threshold = 0.95, min_fold_width = 2, bounds = b)
+  k <- r[r$parameter == "k_pop", ]
+  expect_equal(c(k$min, k$max), c(0.9, 1.35))  # halfway from the estimates (1.0, 1.2) to the bounds
+  # omega_k has no bounds row and is widened as before
+  expect_equal(r$max[r$parameter == "omega_k"], 1.0)
+  # bounds the widening doesn't reach change nothing
+  b$lower <- 0; b$upper <- Inf
+  expect_equal(get_narrow_ranges(fake_tabestimates(), p_threshold = 0.95, min_fold_width = 2, bounds = b),
+               get_narrow_ranges(fake_tabestimates(), p_threshold = 0.95, min_fold_width = 2))
+})
+
 test_that("the best run is kept even when it alone has more weight than the threshold", {
   te <- fake_tabestimates()
   te$bicc[te$run != 1] <- te$bicc[te$run != 1] + 50

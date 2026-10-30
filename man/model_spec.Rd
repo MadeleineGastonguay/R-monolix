@@ -20,9 +20,11 @@ model_spec(config, treatment_effects = NULL, use_fixed = TRUE)
 A list with \code{model_file}, \code{data_file}, \code{header_types} (in data column
 order), \code{error_model}, \code{exclude_random_effects} (\code{model.random_effects_excluded},
 plus \code{decisions.random_effects_removed} with \code{use_fixed}), \code{distributions},
-\code{treatment_effects}, \code{fixed}, \code{estimation}, \code{scenario}, \code{initial_ranges},
-\code{omega_range} and \code{error_initial} (overrides of Monolix's default
-starting values for error-model parameters).
+\code{limits} (bounds of logit-normal parameters, when not (0, 1)),
+\code{bounds} (\code{\link[=parameter_bounds]{parameter_bounds()}}), \code{treatment_effects}, \code{fixed},
+\code{estimation}, \code{scenario}, \code{initial_ranges}, \code{omega_range} and
+\code{error_initial} (overrides of Monolix's default starting values for
+error-model parameters).
 }
 \description{
 Resolves the config into everything needed to build one project: the base

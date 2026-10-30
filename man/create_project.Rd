@@ -15,6 +15,7 @@ create_project(
   fixed = NULL,
   linearize = FALSE,
   distributions = NULL,
+  limits = NULL,
   estimation = NULL,
   scenario = NULL
 )
@@ -43,7 +44,12 @@ create_project(
 \item{linearize}{Use linearization for standard errors and the likelihood.}
 
 \item{distributions}{Named character vector or list of parameter
-distributions, e.g. \code{c(param1 = "normal")}.}
+distributions, e.g. \code{c(param1 = "normal", param2 = "logitnormal")}
+(\code{lognormal}, \code{normal}, \code{logitnormal}, \code{probitnormal}, or Monolix's
+spelling, e.g. \code{logNormal}).}
+
+\item{limits}{Named list of \code{c(min, max)} bounds for logit-normal
+parameters, e.g. \code{list(param2 = c(0, 100))}; Monolix's default is (0, 1).}
 
 \item{estimation, scenario}{Passed to \code{\link[=set_project_settings]{set_project_settings()}}.}
 }

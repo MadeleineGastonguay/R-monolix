@@ -32,7 +32,12 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   catcovs <- ht$column[ht$type == "catcov"]
   # the report colours groups with Dark2 (8 colours): only covariates with at most 8 levels
   n_levels <- vapply(catcovs, function(cc) length(unique(stats::na.omit(data[[cc]]))), numeric(1))
-  strat <- catcovs[!grepl("^int", catcovs) & n_levels <= 8]
+  strat <- catcovs[n_levels <= 8]
+  # a group_labels key from the data: the first row's values of the stratify_by covariates
+  key_example <- if (length(strat)) {
+    first <- data[1, strat, drop = FALSE]
+    list(key = paste(unlist(first), collapse = "."), says = paste(strat, unlist(first), sep = " = ", collapse = ", "))
+  } else list(key = "1.0", says = "cov1 = 1, cov2 = 0")
 
   # examples in the comments use this model's own parameters and covariates
   p1 <- parsed$parameters[1]
@@ -77,7 +82,8 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   }
   ln("  random_effects_excluded: []", cm(paste0("parameters with no random effect; model parameters: ",
                                                  paste(parsed$parameters, collapse = ", "))))
-  ln("  distributions: {}", cm(paste0("e.g. {", p1, ": normal}; default lognormal")))
+  ln("  distributions: {}", cm(paste0("default lognormal; e.g. {", p1, ": normal} or {", p1,
+                                     ": {distribution: logitnormal, limits: [0, 100]}} (limits default [0, 1])")))
   if (length(transforms)) {
     ln("  report_transforms:", cm("how estimates are shown in reports"))
     for (k in names(transforms)) {
@@ -103,11 +109,13 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("  plots: ", yv(sc$plots))
   ln("")
   ln("step1_igs:", cm("convergence assessment without covariates"))
-  ln("  initial_ranges:", cm("REQUIRED: plausible min/max for each parameter; range_around(x) gives [x/100, 100x]"))
+  ln("  initial_ranges:", cm(paste0("REQUIRED: plausible min/max for each parameter, inside its distribution's bounds; ",
+                                    "log10: true samples on a log scale, false on a linear one; range_around(x) gives [x/100, 100x]")))
   for (p in parsed$parameters) ln("    ", yk(p), ": {min: ~, max: ~, log10: true}", cm("REQUIRED"))
   ln("  omega_range: ", flow(d$step1_igs$omega_range), cm("wide search, random-effect SDs"))
   ln("  wide_nits: ", yv(d$step1_igs$wide_nits))
-  ln("  narrow: ", flow(d$step1_igs$narrow), cm("min_fold_width: e.g. 2 widens ranges to at least [best/2, 2*best]"))
+  ln("  narrow: ", flow(d$step1_igs$narrow), cm(paste0("ranges: min-max of the estimates of the best wide runs (cumulative BICc weight up to p_threshold); ",
+                                                 "min_fold_width: e.g. 2 widens them to at least [best/2, 2*best]")))
   ln("  profile_likelihood: {}", cm(paste0("run after step 1, e.g. {", p1, "_pop: {range: [0.5, 20], n: 10, log10: true}} or {", p1, "_pop: {values: [1, 2, 3, 5]}}")))
   ln("  plots: ", flow(d$step1_igs$plots))
   ln("")
@@ -122,14 +130,14 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   s3 <- d$step3_model_building
   ln("step3_model_building:")
   ln("  method: ", yv(s3$method), cm("SCM, COSSAC, [SCM, COSSAC] to run and compare both, or none to compare only candidate_models"))
-  ln("  criterion: ", yv(s3$criterion), cm("Monolix's name for BICc; or LRT"))
+  ln("  criterion: ", yv(s3$criterion), cm("Monolix's name for BICc; or LRT. Used by SCM and COSSAC"))
   ln("  lrt_thresholds: ", flow(s3$lrt_thresholds), cm("only used with LRT"))
   if (length(covs)) {
-    ln("  covariates: ", flow(covs), cm("guessed: all covariate columns, check"))
+    ln("  covariates: ", flow(covs), cm("guessed: all covariate columns, check; all (the default) searches every covariate column"))
   } else {
     ln("  covariates: all")
   }
-  ln("  parameters: all", cm("or a list of parameters to search"))
+  ln("  parameters: all", cm("or a list of parameters to search; all (the default) searches every parameter"))
   ln("  relationships: ~", cm(paste0("or {include: {", p1, ": [", c1, "]}, exclude: {", p2, ": [", c2, "]}}: pairs in every model / in none")))
   ln("  use_linearization: ", yv(s3$use_linearization))
   ln("  initial_value_rounding: ", yv(s3$initial_value_rounding), cm("significant figures for _pop initial values"))
@@ -150,11 +158,12 @@ draft_config <- function(model_file, data_file, name = NULL, path = "analysis.ya
   ln("")
   ln("report:")
   if (length(strat)) {
-    ln("  stratify_by: ", flow(strat), cm("guessed: categorical covariates with at most 8 levels, not starting with int, check"))
+    ln("  stratify_by: ", flow(strat), cm("guessed: categorical covariates with at most 8 levels, check; one group per combination of values"))
   } else {
     ln("  stratify_by: ~")
   }
-  ln("  group_labels: ~", cm("names for the groups, e.g. {\"1.0\": treated, \"0.0\": control}"))
+  ln("  group_labels: ~", cm(paste0("names for the groups; key: the stratify_by values joined with \".\" in that order, ",
+                                    "e.g. {\"", key_example$key, "\": group1} for ", key_example$says)))
 
   writeLines(L, path)
 

@@ -4,8 +4,8 @@
 # Bug fixes since porting: fixed values matched by name; results read from the project's own
 # folder (no globals); attempt cap and seed in initial_guess_sampling(); only missing betas
 # set to 0 in set_base(); fixed Monolix seed; BICc as default model-building criterion;
-# create_project() stops when newProject() fails; generate_report() takes groups, labels and
-# rescaling from the config (template generalized).
+# create_project() stops when newProject() fails and sets logit-normal limits; generate_report()
+# takes groups, labels and rescaling from the config (template generalized).
 
 #' Set scenario tasks and SAEM settings for the loaded project
 #'
@@ -47,7 +47,11 @@ set_project_settings <- function(linearize = FALSE, estimation = NULL, scenario 
 #' With a config, use [setup_project()] instead, which takes everything from a [model_spec()].
 #'
 #' @param distributions Named character vector or list of parameter
-#'   distributions, e.g. `c(param1 = "normal")`.
+#'   distributions, e.g. `c(param1 = "normal", param2 = "logitnormal")`
+#'   (`lognormal`, `normal`, `logitnormal`, `probitnormal`, or Monolix's
+#'   spelling, e.g. `logNormal`).
+#' @param limits Named list of `c(min, max)` bounds for logit-normal
+#'   parameters, e.g. `list(param2 = c(0, 100))`; Monolix's default is (0, 1).
 #' @param estimation,scenario Passed to [set_project_settings()].
 #' @param model_file Path to the Mlxtran structural model.
 #' @param data_file Path to the data file.
@@ -68,7 +72,8 @@ create_project <- function(model_file, data_file,
                            headerTypes, error_model, 
                            exclude_random_effects, treatment_effects = NULL, 
                            normal_dist = NULL, fixed = NULL,
-                           linearize = FALSE, distributions = NULL, estimation = NULL, scenario = NULL){
+                           linearize = FALSE, distributions = NULL, limits = NULL,
+                           estimation = NULL, scenario = NULL){
   
   # Create a new project. newProject() reports failures as a message and returns FALSE
   # instead of raising an error, so check its value.
@@ -105,9 +110,10 @@ create_project <- function(model_file, data_file,
   if(!is.null(normal_dist) || length(distributions) > 0){
     current <- lixoftConnectors::getIndividualParameterModel()$distribution
     current[normal_dist] <- "normal"
-    current[names(distributions)] <- unlist(distributions)
+    current[names(distributions)] <- monolix_distribution(unlist(distributions))
     lixoftConnectors::setIndividualParameterDistribution(current)
   }
+  if(length(limits)) set_logit_limits(limits)
   
   if(!is.null(fixed)){
     popparams <- lixoftConnectors::getPopulationParameterInformation()
@@ -121,6 +127,38 @@ create_project <- function(model_file, data_file,
   
   set_project_settings(linearize, estimation, scenario)
   
+}
+
+# Monolix's spelling of a distribution name (lognormal -> logNormal); other names unchanged
+monolix_distribution <- function(x) {
+  out <- unname(DISTRIBUTIONS[tolower(x)])
+  ifelse(is.na(out), x, out)
+}
+
+# Set the bounds of logit-normal parameters on the loaded project. Monolix needs each
+# parameter's starting value inside its bounds, so starting values outside them move to the
+# middle (the IGS sets its own starting values later).
+set_logit_limits <- function(limits) {
+  limits <- lapply(limits, as.numeric)
+  applied <- function() {
+    got <- lixoftConnectors::getIndividualParameterModel()$limits
+    vapply(names(limits), function(p) isTRUE(all.equal(as.numeric(unlist(got[[p]])), limits[[p]])), logical(1))
+  }
+  do.call(lixoftConnectors::setIndividualLogitLimits, limits)
+  if (all(applied())) return(invisible(TRUE))
+  pop <- lixoftConnectors::getPopulationParameterInformation()
+  for (p in names(limits)) {
+    i <- pop$name == paste0(p, "_pop")
+    if (any(i) && outside_bounds(pop$initialValue[i], limits[[p]][1], limits[[p]][2])) pop$initialValue[i] <- mean(limits[[p]])
+  }
+  lixoftConnectors::setPopulationParameterInformation(pop)
+  do.call(lixoftConnectors::setIndividualLogitLimits, limits)
+  bad <- names(limits)[!applied()]
+  if (length(bad)) {
+    stop("Monolix did not set the limits of ", paste(bad, collapse = ", "),
+         "; see the [ERROR] message above. Limits apply only to logitnormal parameters.", call. = FALSE)
+  }
+  invisible(TRUE)
 }
 
 #' Set initial values (and fixed parameters) on the loaded project

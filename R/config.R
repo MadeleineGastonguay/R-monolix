@@ -245,6 +245,16 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
   data <- if (data_ok) tryCatch(read_monolix_data(config$data$file),
                                 error = function(e) { add(conditionMessage(e)); NULL }) else NULL
   params <- parsed$parameters
+  bounds <- NULL  # allowed values of each parameter, from model.distributions (set below)
+  # values of a _pop parameter (a sampling range, fixed value or profile grid) must lie inside its bounds
+  check_bounds <- function(key, p, values) {
+    b <- if (!is.null(bounds)) bounds[bounds$parameter == p, ]
+    if (is.null(b) || !nrow(b) || !is.numeric(values)) return(invisible())
+    if (any(outside_bounds(values, b$lower, b$upper), na.rm = TRUE)) {
+      add(key, ": ", sub("_pop$", "", p), " has a ", b$distribution, " distribution, so its values must be ",
+          bounds_text(b$lower, b$upper), " (see model.distributions)")
+    }
+  }
 
   # header types
   ht <- unlist(config$data$header_types)
@@ -302,11 +312,27 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
                            " clash with Monolix's error-model parameter names; rename them in the model file")
     re <- unlist(config$model$random_effects_excluded)
     if (length(setdiff(re, params))) add("model.random_effects_excluded has unknown parameter(s): ", paste(setdiff(re, params), collapse = ", "))
-    di <- unlist(config$model$distributions)
-    if (length(setdiff(names(di), params))) add("model.distributions has unknown parameter(s): ", paste(setdiff(names(di), params), collapse = ", "))
-    if (length(setdiff(di, c("lognormal", "normal", "logitnormal", "probitnormal")))) {
-      add("model.distributions values must be lognormal, normal, logitnormal or probitnormal")
+    dl <- config$model$distributions %||% list()
+    if (length(setdiff(names(dl), params))) add("model.distributions has unknown parameter(s): ", paste(setdiff(names(dl), params), collapse = ", "))
+    dt <- parse_distributions(dl)$type
+    if (any(is.na(dt)) || length(setdiff(dt, names(DISTRIBUTIONS)))) {
+      add("model.distributions values must be lognormal, normal, logitnormal or probitnormal, ",
+          "or {distribution: logitnormal, limits: [min, max]}")
     }
+    for (k in names(dl)) {
+      d <- dl[[k]]
+      if (!is.list(d)) next
+      extra <- setdiff(names(d), c("distribution", "limits"))
+      if (length(extra)) add("model.distributions.", k, ": unknown key(s) ", paste(extra, collapse = ", "), " (use distribution and limits)")
+      if (is.null(d$limits)) next
+      l <- unlist(d$limits)
+      if (!identical(tolower(as.character(d$distribution %||% "")), "logitnormal")) {
+        add("model.distributions.", k, ": limits apply only to logitnormal parameters (probitnormal is always between 0 and 1)")
+      } else if (!is.numeric(l) || length(l) != 2 || !all(is.finite(l)) || l[1] >= l[2]) {
+        add("model.distributions.", k, ".limits must be [min, max] with min < max")
+      }
+    }
+    bounds <- parameter_bounds(dl, params)
     for (k in names(config$model$report_transforms)) {
       rt <- config$model$report_transforms[[k]]
       if (!k %in% paste0(params, "_pop")) add("model.report_transforms: '", k, "' is not a population parameter")
@@ -368,6 +394,7 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
       if (is.null(r$min) || is.null(r$max)) { add("REQUIRED: step1_igs.initial_ranges.", k, " min and max"); next }
       if (!is_number(r$min) || !is_number(r$max) || r$min >= r$max) { add("step1_igs.initial_ranges.", k, ": min must be below max"); next }
       if (isTRUE(r$log10) && r$min <= 0) add("step1_igs.initial_ranges.", k, ": log10 sampling needs min > 0")
+      check_bounds(paste0("step1_igs.initial_ranges.", k), paste0(k, "_pop"), c(r$min, r$max))
     }
   }
   if (!is.numeric(s1$omega_range) || length(s1$omega_range) != 2 || s1$omega_range[1] <= 0 || s1$omega_range[1] >= s1$omega_range[2]) {
@@ -393,12 +420,18 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
       if (!is.null(pl$range) || !is.null(pl$n)) add(key, ": give either values or range and n, not both")
       if (!is.numeric(pl$values) || length(unique(pl$values)) < 2 || !all(is.finite(pl$values))) {
         add(key, ".values must be a list of at least 2 different numbers")
-      } else if (isTRUE(pl$log10) && any(pl$values <= 0)) add(key, ": a log10 axis needs values > 0")
+      } else {
+        if (isTRUE(pl$log10) && any(pl$values <= 0)) add(key, ": a log10 axis needs values > 0")
+        check_bounds(key, k, pl$values)
+      }
       next
     }
     if (!is.numeric(pl$range) || length(pl$range) != 2 || pl$range[1] >= pl$range[2]) {
       add(key, ".range must be [min, max]")
-    } else if (isTRUE(pl$log10) && pl$range[1] <= 0) add(key, ": a log10 grid needs range min > 0")
+    } else {
+      if (isTRUE(pl$log10) && pl$range[1] <= 0) add(key, ": a log10 grid needs range min > 0")
+      check_bounds(key, k, pl$range)
+    }
     if (!is_count(pl$n) || pl$n < 2) add(key, ".n must be a whole number of at least 2")
   }
 
@@ -415,6 +448,7 @@ validate_config <- function(config, up_to_step = 1, decisions_needed = TRUE) {
       if (!is.null(params)) {
         bad <- setdiff(names(fxv), c(paste0(params, "_pop"), error_params))
         if (length(bad)) add("decisions.fixed has unknown parameter(s): ", paste(bad, collapse = ", "), " (use the _pop names)")
+        if (is.numeric(fxv)) for (k in names(fxv)) check_bounds(paste0("decisions.fixed.", k), k, fxv[[k]])
       }
     }
     rm <- removed_random_effects(config)

@@ -229,3 +229,41 @@ test_that("checkpoint 1b asks for fixed_confirmed only when something is fixed",
   expect_match(cp(list("  fixed: ~" = "  fixed: {p_pop: 3}", "  fixed_confirmed: ~" = "  fixed_confirmed: no")),
                "error: .*fixed_confirmed must be true")
 })
+
+test_that("bounded distributions are parsed, and values outside the bounds are reported", {
+  chk <- function(repl, step = 2) {
+    cfg <- read_analysis_config(make_config(c(list("  fixed: ~" = "  fixed: {}"), repl)))
+    list(cfg = cfg, err = tryCatch({ validate_config(cfg, step); "" }, error = function(e) conditionMessage(e)))
+  }
+  logit <- list("  distributions: {}" = "  distributions: {ta: normal, p: {distribution: logitnormal, limits: [0, 100]}}")
+  ok <- chk(logit)
+  expect_equal(ok$err, "")
+  s <- model_spec(ok$cfg)
+  expect_equal(s$distributions, c(ta = "normal", p = "logitnormal"))
+  expect_equal(s$limits, list(p = c(0, 100)))
+  b <- s$bounds
+  expect_equal(b$lower[b$parameter == "p_pop"], 0)
+  expect_equal(b$upper[b$parameter == "p_pop"], 100)
+  expect_equal(b$lower[b$parameter == "ta_pop"], -Inf)
+  expect_equal(b$distribution[b$parameter == "lambda_pop"], "lognormal")
+
+  # the default limits are (0, 1), which p's sampling range (0.01 to 10) goes past
+  err <- chk(list("  distributions: {}" = "  distributions: {p: logitnormal}"))$err
+  expect_match(err, "initial_ranges.p: p has a logitnormal distribution, so its values must be between 0 and 1")
+  expect_null(model_spec(chk(list("  distributions: {}" = "  distributions: {p: logitnormal}"))$cfg)$limits)
+
+  # a lognormal range must stay above 0; fixed values and profile grids are checked too
+  err <- chk(c(logit, list("    m: {min: 0.01" = "    m: {min: 0, max: 100}",
+                           "  fixed: {}" = "  fixed: {p_pop: 150}",
+                           "  profile_likelihood: {}" = "  profile_likelihood: {p_pop: {range: [50, 120], n: 5}}")))$err
+  expect_match(err, "initial_ranges.m: m has a lognormal distribution, so its values must be above 0")
+  expect_match(err, "decisions.fixed.p_pop: p has a logitnormal distribution, so its values must be between 0 and 100")
+  expect_match(err, "profile_likelihood.p_pop: p has a logitnormal")
+
+  # badly written entries
+  err <- chk(list("  distributions: {}" = "  distributions: {p: {distribution: probitnormal, limits: [0, 2]}, m: {distribution: logitnormal, limits: [5, 1]}, ta: {dist: normal}}"))$err
+  expect_match(err, "limits apply only to logitnormal")
+  expect_match(err, "m.limits must be \\[min, max\\] with min < max")
+  expect_match(err, "ta: unknown key\\(s\\) dist")
+  expect_match(err, "values must be lognormal, normal, logitnormal or probitnormal")
+})

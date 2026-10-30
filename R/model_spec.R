@@ -16,9 +16,11 @@
 #' @return A list with `model_file`, `data_file`, `header_types` (in data column
 #'   order), `error_model`, `exclude_random_effects` (`model.random_effects_excluded`,
 #'   plus `decisions.random_effects_removed` with `use_fixed`), `distributions`,
-#'   `treatment_effects`, `fixed`, `estimation`, `scenario`, `initial_ranges`,
-#'   `omega_range` and `error_initial` (overrides of Monolix's default
-#'   starting values for error-model parameters).
+#'   `limits` (bounds of logit-normal parameters, when not (0, 1)),
+#'   `bounds` ([parameter_bounds()]), `treatment_effects`, `fixed`,
+#'   `estimation`, `scenario`, `initial_ranges`, `omega_range` and
+#'   `error_initial` (overrides of Monolix's default starting values for
+#'   error-model parameters).
 #' @export
 model_spec <- function(config, treatment_effects = NULL, use_fixed = TRUE) {
   data_cols <- names(read_monolix_data(config$data$file))
@@ -32,6 +34,9 @@ model_spec <- function(config, treatment_effects = NULL, use_fixed = TRUE) {
   }
 
   nonempty <- function(x) if (length(x)) x else NULL
+  params <- parse_mlxtran(config$model$structural_model)$parameters
+  dists <- parse_distributions(config$model$distributions)
+  limits <- Filter(function(l) !identical(l, c(0, 1)), dists$limits)
   list(
     model_file = config$model$structural_model,
     data_file = config$data$file,
@@ -40,15 +45,75 @@ model_spec <- function(config, treatment_effects = NULL, use_fixed = TRUE) {
     error_initial = unlist(config$model$error_initial),
     exclude_random_effects = nonempty(unique(c(unlist(config$model$random_effects_excluded),
                                                if (use_fixed) removed_random_effects(config)))),
-    distributions = nonempty(unlist(config$model$distributions)),
+    distributions = nonempty(dists$type),
+    limits = nonempty(limits),
+    bounds = parameter_bounds(config$model$distributions, params),
     treatment_effects = nonempty(lapply(treatment_effects, unlist)),
     fixed = if (use_fixed) nonempty(unlist(fixed)) else NULL,
     estimation = config$estimation,
     scenario = config$scenario,
-    initial_ranges = initial_ranges_table(config$step1_igs$initial_ranges,
-                                          parse_mlxtran(config$model$structural_model)$parameters),
+    initial_ranges = initial_ranges_table(config$step1_igs$initial_ranges, params),
     omega_range = config$step1_igs$omega_range
   )
+}
+
+# Distribution names in analysis.yaml and Monolix's spelling of them
+DISTRIBUTIONS <- c(lognormal = "logNormal", normal = "normal", logitnormal = "logitNormal",
+                   probitnormal = "probitNormal")
+
+# model.distributions as a distribution per parameter (`type`, analysis.yaml names) and the
+# bounds of each logit-normal parameter (`limits`, (0, 1) unless given). An entry is either a
+# name (`param2: logitnormal`) or a map (`param2: {distribution: logitnormal, limits: [0, 100]}`).
+parse_distributions <- function(x) {
+  x <- x %||% list()
+  type <- vapply(x, function(d) {
+    d <- if (is.list(d)) d$distribution else d
+    if (is.character(d) && length(d) == 1) tolower(d) else NA_character_
+  }, character(1))
+  limits <- lapply(x[which(type == "logitnormal")], function(d) {
+    if (is.list(d) && !is.null(d$limits)) as.numeric(unlist(d$limits)) else c(0, 1)
+  })
+  list(type = type, limits = limits)
+}
+
+#' Allowed values of each structural parameter
+#'
+#' From `model.distributions`: lognormal parameters (Monolix's default) must
+#' be above 0, logit-normal ones between their limits ((0, 1) unless
+#' `limits` is given), probit-normal ones between 0 and 1, and normal ones
+#' can take any value. Sampling ranges, fixed values and profile grids must
+#' lie strictly inside these bounds.
+#'
+#' @param distributions `model.distributions` from the config, e.g.
+#'   `list(param1 = "normal", param2 = list(distribution = "logitnormal", limits = c(0, 100)))`.
+#' @param parameters Structural parameter names.
+#' @return Data frame with `parameter` (the `_pop` name), `distribution`,
+#'   `lower` and `upper`.
+#' @export
+parameter_bounds <- function(distributions, parameters) {
+  d <- parse_distributions(distributions)
+  type <- stats::setNames(rep("lognormal", length(parameters)), parameters)
+  known <- intersect(names(d$type)[!is.na(d$type)], parameters)
+  type[known] <- d$type[known]
+  lower <- stats::setNames(ifelse(type == "normal", -Inf, 0), parameters)
+  upper <- stats::setNames(ifelse(type %in% c("logitnormal", "probitnormal"), 1, Inf), parameters)
+  for (p in intersect(names(d$limits), parameters)) {
+    l <- d$limits[[p]]
+    if (length(l) == 2 && all(is.finite(l))) { lower[p] <- l[1]; upper[p] <- l[2] }
+  }
+  data.frame(parameter = paste0(parameters, "_pop"), distribution = unname(type),
+             lower = unname(lower), upper = unname(upper), stringsAsFactors = FALSE)
+}
+
+# Which of `values` lie outside the open interval (lower, upper)
+outside_bounds <- function(values, lower, upper) !(values > lower & values < upper)
+
+# "above 0", "between 0 and 100" or "" (any value): what a parameter's bounds allow
+bounds_text <- function(lower, upper) {
+  if (is.finite(lower) && is.finite(upper)) paste0("between ", format(lower), " and ", format(upper))
+  else if (is.finite(lower)) paste0("above ", format(lower))
+  else if (is.finite(upper)) paste0("below ", format(upper))
+  else ""
 }
 
 # initial_ranges from the YAML as a table, with _pop names
@@ -124,6 +189,7 @@ setup_project <- function(spec) {
   require_monolix()
   create_project(spec$model_file, spec$data_file, spec$header_types, spec$error_model,
                  spec$exclude_random_effects, treatment_effects = spec$treatment_effects,
-                 fixed = spec$fixed, distributions = spec$distributions, estimation = spec$estimation,
+                 fixed = spec$fixed, distributions = spec$distributions, limits = spec$limits,
+                 estimation = spec$estimation,
                  scenario = spec$scenario)
 }

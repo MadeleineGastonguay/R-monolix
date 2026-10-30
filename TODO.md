@@ -14,6 +14,10 @@ needs a real run too.
   entries, so `scm_results_table()` and `plot_model_building()` haven't seen COSSAC's
   alternating order. COSSAC with a parameter without a random effect (which Monolix handles with
   SCM at the end) has only had a quick run.
+- **Logit-normal limits** (`model.distributions: {param: {distribution: logitnormal, limits: [min, max]}}`):
+  `set_logit_limits()` calls `setIndividualLogitLimits()`, and moves the starting value inside
+  the limits if Monolix doesn't take them at first. Also check that Monolix accepts
+  `probitNormal`, which the connectors' help pages don't list.
 - **Models with regressors** in the report's Simulx simulation (models with doses are checked).
 - **Several observation types.** The report's prediction plots need one observation column in
   `predictions.txt` and are skipped otherwise.

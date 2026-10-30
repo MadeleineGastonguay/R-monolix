@@ -8,7 +8,8 @@ get_narrow_ranges(
   tabestimates,
   p_threshold = NULL,
   bicc_cutoff = NULL,
-  min_fold_width = NULL
+  min_fold_width = NULL,
+  bounds = NULL
 )
 }
 \arguments{
@@ -22,6 +23,10 @@ below this value.}
 \item{min_fold_width}{\code{NULL} (default) uses the min-max range as is. A number
 \code{f > 1} widens each range to at least \verb{[best / f, best * f]} around the best
 run's estimate (positive estimates only).}
+
+\item{bounds}{Optional \code{\link[=parameter_bounds]{parameter_bounds()}} table. Where widening would reach
+a parameter's bound (e.g. above 1 for a logit-normal parameter on (0, 1)),
+the range goes only halfway from the estimates to the bound.}
 }
 \value{
 Data frame with \code{parameter}, \code{min}, \code{max}, \code{best}.

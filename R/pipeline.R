@@ -169,7 +169,7 @@ run_step1 <- function(config, rerun = FALSE) {
   diagnostics(config, wide, file.path(dir, "wide"), sets_ranges = TRUE)
 
   narrow_ranges <- get_narrow_ranges(wide$tabestimates, p_threshold = s1$narrow$p_threshold,
-                                     min_fold_width = s1$narrow$min_fold_width)
+                                     min_fold_width = s1$narrow$min_fold_width, bounds = spec$bounds)
   utils::write.csv(narrow_ranges, file.path(dir, "narrow_ranges.csv"), row.names = FALSE)
 
   message("Step 1: narrow initial guess sampling (", s1$narrow$nits, " runs)")

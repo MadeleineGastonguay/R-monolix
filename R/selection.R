@@ -38,9 +38,13 @@ calculate_BICw <- function(tabestimates){
 #' @param min_fold_width `NULL` (default) uses the min-max range as is. A number
 #'   `f > 1` widens each range to at least `[best / f, best * f]` around the best
 #'   run's estimate (positive estimates only).
+#' @param bounds Optional [parameter_bounds()] table. Where widening would reach
+#'   a parameter's bound (e.g. above 1 for a logit-normal parameter on (0, 1)),
+#'   the range goes only halfway from the estimates to the bound.
 #' @return Data frame with `parameter`, `min`, `max`, `best`.
 #' @export
-get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NULL, min_fold_width = NULL){
+get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NULL, min_fold_width = NULL,
+                              bounds = NULL){
 
   if(is.null(p_threshold) == is.null(bicc_cutoff)) stop("Give one of p_threshold or bicc_cutoff.", call. = FALSE)
 
@@ -60,9 +64,18 @@ get_narrow_ranges <- function(tabestimates, p_threshold = NULL, bicc_cutoff = NU
 
   if(!is.null(min_fold_width)){
     stopifnot(is.numeric(min_fold_width), min_fold_width > 1)
+    est_min <- search_ranges$min; est_max <- search_ranges$max
     widen <- search_ranges$best > 0
     search_ranges$min[widen] <- pmin(search_ranges$min[widen], search_ranges$best[widen] / min_fold_width)
     search_ranges$max[widen] <- pmax(search_ranges$max[widen], search_ranges$best[widen] * min_fold_width)
+    if (!is.null(bounds)) {
+      i <- match(search_ranges$parameter, bounds$parameter)
+      lo <- bounds$lower[i]; hi <- bounds$upper[i]
+      low <- !is.na(lo) & search_ranges$min <= lo
+      high <- !is.na(hi) & search_ranges$max >= hi
+      search_ranges$min[low] <- (est_min[low] + lo[low]) / 2
+      search_ranges$max[high] <- (est_max[high] + hi[high]) / 2
+    }
   }
 
   search_ranges

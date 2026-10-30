@@ -154,7 +154,7 @@ scm_delta2_backward_note <- function(mb, delta_bicc = 2) {
          if (nrow(rm) == 1) "it" else "them", " to candidate_models, e.g. scm_delta2_reduced: ", yaml_model)
 }
 
-# "ta: vac; NPs: tlr7, vac", or "(none)"
+# "param1: cov1; param2: cov1, cov2", or "(none)"
 format_covariate_model <- function(cm) {
   if (!length(cm)) return("(none)")
   paste(names(cm), vapply(cm, paste, character(1), collapse = ", "), sep = ": ", collapse = "; ")
